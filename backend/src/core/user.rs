@@ -16,5 +16,10 @@ pub struct CreateUser {
     pub first_name: String,
     pub last_name: String,
     pub r#type: String,
-    pub is_active: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Email {
+    pub email: String,
+    pub user_id: String,
 }
