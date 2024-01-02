@@ -2,17 +2,62 @@ use crate::core::{Email, User};
 use crate::data::{Database, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use aws_config::meta::region::RegionProviderChain;
+use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::types::AttributeValue as AV;
 use aws_sdk_dynamodb::Client;
 use std::collections::HashMap;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct Dynamodb {
     pub client: Client,
-    pub table_name: &'static str,
+    pub table_name: String,
 }
 
 impl Database for Dynamodb {}
+
+impl Dynamodb {
+    pub async fn new(local: bool, table_name: &str) -> Self {
+        let region_provider = RegionProviderChain::default_provider().or_else("eu-west-2");
+
+        // Set endpoint url to localhost to run locally
+        let config = match local {
+            true => {
+                let defaults = aws_config::defaults(BehaviorVersion::latest())
+                    .region(region_provider)
+                    .load()
+                    .await;
+                aws_sdk_dynamodb::config::Builder::from(&defaults)
+                    .endpoint_url("http://localhost:8000")
+                    .build()
+            }
+            false => {
+                let defaults = aws_config::defaults(BehaviorVersion::latest())
+                    .region(region_provider)
+                    .load()
+                    .await;
+                aws_sdk_dynamodb::config::Builder::from(&defaults).build()
+            }
+        };
+
+        let client = Client::from_conf(config);
+
+        // Check if table exists
+        let resp = &client.list_tables().send().await.unwrap();
+        let tables = resp.table_names();
+        if tables.contains(&table_name.to_string()) {
+            info!("table exists");
+        } else {
+            info!("table does not exist");
+        }
+
+        Dynamodb {
+            client,
+            table_name: table_name.into(),
+        }
+    }
+}
 
 fn split_at_hash(input: &str) -> &str {
     input.split_once('#').unwrap().1
@@ -62,7 +107,7 @@ impl UserStore for Dynamodb {
 
         self.client
             .put_item()
-            .table_name(self.table_name)
+            .table_name(&self.table_name)
             .set_item(Some(item))
             .send()
             .await?;
@@ -74,7 +119,7 @@ impl UserStore for Dynamodb {
         match self
             .client
             .get_item()
-            .table_name(self.table_name)
+            .table_name(&self.table_name)
             .key("PK", AV::S(email_key))
             .send()
             .await
@@ -92,7 +137,7 @@ impl UserStore for Dynamodb {
         match self
             .client
             .get_item()
-            .table_name(self.table_name)
+            .table_name(&self.table_name)
             .key("PK", AV::S(key.into()))
             .send()
             .await

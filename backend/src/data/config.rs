@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait Database: Send + Sync + UserStore {}
+pub trait Database: Send + Sync + Clone + UserStore {}
 
 #[async_trait]
 pub trait UserStore: Send + Sync {
