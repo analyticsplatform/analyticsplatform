@@ -4,7 +4,7 @@ use anyhow::Result;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::Serialize;
 
-pub async fn create_id(length: u64) -> String {
+async fn create_id(length: u64) -> String {
     let code: String = (0..length)
         .map(|_| thread_rng().sample(Alphanumeric) as char)
         .collect();

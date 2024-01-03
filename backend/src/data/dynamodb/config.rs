@@ -1,4 +1,4 @@
-use crate::core::{Email, Session, User};
+use crate::core::{CreateUser, Email, Session, User};
 use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -52,10 +52,22 @@ impl Dynamodb {
             return Err(anyhow!(""));
         }
 
-        Ok(Dynamodb {
-            client,
+        let dynamodb = Dynamodb {
+            client: client.clone(),
             table_name: table_name.into(),
-        })
+        };
+
+        // TODO: Create from env var/config after checking existence
+        let admin_user = CreateUser {
+            email: String::from("test@example.com"),
+            first_name: String::from("Admin"),
+            last_name: String::from("Istrator"),
+            r#type: String::from("superadmin"),
+        };
+
+        let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
+
+        Ok(dynamodb)
     }
 }
 
