@@ -1,5 +1,5 @@
-use crate::core::{Email, User};
-use crate::data::{Database, UserStore};
+use crate::core::{Email, Session, User};
+use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
@@ -86,6 +86,15 @@ impl From<HashMap<String, AV>> for Email {
     }
 }
 
+impl From<HashMap<String, AV>> for Session {
+    fn from(value: HashMap<String, AV>) -> Self {
+        Session {
+            id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
+            user_id: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
+        }
+    }
+}
+
 #[async_trait]
 impl UserStore for Dynamodb {
     async fn create_user(&self, user: &User) -> Result<()> {
@@ -145,5 +154,43 @@ impl UserStore for Dynamodb {
             Ok(response) => Ok(response.item.unwrap().into()),
             Err(_e) => Err(anyhow!("user not found")),
         }
+    }
+}
+
+#[async_trait]
+impl SessionStore for Dynamodb {
+    async fn get_session_by_id(&self, id: &str) -> Result<Session> {
+        let key = format!("SESSION#{id}");
+        match self
+            .client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("PK", AV::S(key.clone()))
+            .key("SK", AV::S(key))
+            .send()
+            .await
+        {
+            Ok(response) => Ok(response.item.unwrap().into()),
+            Err(_e) => Err(anyhow!("session not found")),
+        }
+    }
+
+    async fn create_session(&self, user: &User, session_id: &str) -> Result<()> {
+        // Create the item to insert
+        let mut item = std::collections::HashMap::new();
+        let key = format!("{}{}", "SESSION#", user.id);
+
+        item.insert(String::from("PK"), AV::S(key.clone()));
+        item.insert(String::from("SK"), AV::S(key));
+        item.insert(String::from("GSI1PK"), AV::S(session_id.to_string()));
+        item.insert(String::from("GSI1SK"), AV::S(session_id.to_string()));
+
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await?;
+        Ok(())
     }
 }
