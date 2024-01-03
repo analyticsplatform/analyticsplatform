@@ -18,7 +18,7 @@ pub struct Dynamodb {
 impl Database for Dynamodb {}
 
 impl Dynamodb {
-    pub async fn new(local: bool, table_name: &str) -> Self {
+    pub async fn new(local: bool, table_name: &str) -> Result<Self> {
         let region_provider = RegionProviderChain::default_provider().or_else("eu-west-2");
 
         // Set endpoint url to localhost to run locally
@@ -46,16 +46,16 @@ impl Dynamodb {
         // Check if table exists
         let resp = &client.list_tables().send().await.unwrap();
         let tables = resp.table_names();
-        if tables.contains(&table_name.to_string()) {
-            info!("table exists");
-        } else {
+
+        if !tables.contains(&table_name.to_string()) {
             info!("table does not exist");
+            return Err(anyhow!(""));
         }
 
-        Dynamodb {
+        Ok(Dynamodb {
             client,
             table_name: table_name.into(),
-        }
+        })
     }
 }
 
