@@ -1,15 +1,8 @@
+use crate::core::create_id;
 use crate::core::User;
 use crate::data::Database;
 use anyhow::Result;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::Serialize;
-
-async fn create_id(length: u64) -> String {
-    let code: String = (0..length)
-        .map(|_| thread_rng().sample(Alphanumeric) as char)
-        .collect();
-    code.to_uppercase()
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Session {
