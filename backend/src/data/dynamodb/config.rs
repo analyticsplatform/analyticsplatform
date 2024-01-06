@@ -7,7 +7,7 @@ use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::types::AttributeValue as AV;
 use aws_sdk_dynamodb::Client;
 use std::collections::HashMap;
-use tracing::info;
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub struct Dynamodb {
@@ -48,7 +48,7 @@ impl Dynamodb {
         let tables = resp.table_names();
 
         if !tables.contains(&table_name.to_string()) {
-            info!("table does not exist");
+            error!("table does not exist");
             return Err(anyhow!(""));
         }
 
