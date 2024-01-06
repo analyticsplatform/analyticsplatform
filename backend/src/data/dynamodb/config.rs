@@ -110,16 +110,16 @@ impl From<HashMap<String, AV>> for Session {
 #[async_trait]
 impl UserStore for Dynamodb {
     async fn create_user(&self, user: &User) -> Result<()> {
-        // Create the item to insert
+        // Create the USER item to insert
         let mut item = std::collections::HashMap::new();
         let key = format!("{}{}", "USER#", user.id);
         let email = format!("{}{}", "EMAIL#", user.email);
         let r#type = format!("{}{}", "USERTYPE#", user.r#type);
 
         item.insert(String::from("PK"), AV::S(key.clone()));
-        item.insert(String::from("SK"), AV::S(key));
+        item.insert(String::from("SK"), AV::S(key.clone()));
         item.insert(String::from("GSI1PK"), AV::S(email.clone()));
-        item.insert(String::from("GSI1SK"), AV::S(email));
+        item.insert(String::from("GSI1SK"), AV::S(email.clone()));
         item.insert(String::from("GSI2PK"), AV::S(r#type.clone()));
         item.insert(String::from("GSI2SK"), AV::S(r#type));
         item.insert(String::from("first_name"), AV::S(user.first_name.clone()));
@@ -132,6 +132,21 @@ impl UserStore for Dynamodb {
             .set_item(Some(item))
             .send()
             .await?;
+
+        // Create the EMAIL item to insert
+        let mut email_item = std::collections::HashMap::new();
+        email_item.insert(String::from("PK"), AV::S(email.clone()));
+        email_item.insert(String::from("SK"), AV::S(email));
+        email_item.insert(String::from("GSI1PK"), AV::S(key.clone()));
+        email_item.insert(String::from("GSI1SK"), AV::S(key.clone()));
+
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(email_item))
+            .send()
+            .await?;
+
         Ok(())
     }
 
