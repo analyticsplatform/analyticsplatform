@@ -34,6 +34,10 @@ impl User {
         database.create_user(&new_user).await
     }
 
+    pub async fn from_email<T: Database>(database: T, email: &str) -> Result<User> {
+        database.get_user_by_email(email).await
+    }
+
     fn from_create_user(create_user: &CreateUser, id: &str, is_active: bool) -> User {
         User {
             id: id.to_string(),

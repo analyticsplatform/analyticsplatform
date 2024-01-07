@@ -7,7 +7,7 @@ use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::types::AttributeValue as AV;
 use aws_sdk_dynamodb::Client;
 use std::collections::HashMap;
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub struct Dynamodb {
@@ -57,15 +57,24 @@ impl Dynamodb {
             table_name: table_name.into(),
         };
 
-        // TODO: Create from env var/config after checking existence
-        let admin_user = CreateUser {
-            email: String::from("test@example.com"),
-            first_name: String::from("Admin"),
-            last_name: String::from("Istrator"),
-            r#type: String::from("superadmin"),
-        };
+        let admin_user = User::from_email(dynamodb.clone(), "test@example.com").await;
 
-        let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
+        match admin_user {
+            Ok(_) => {
+                info!("db init: admin user exists.");
+            }
+            Err(_) => {
+                info!("db init: creating admin user.");
+                let admin_user = CreateUser {
+                    email: String::from("test@example.com"),
+                    first_name: String::from("Admin"),
+                    last_name: String::from("Istrator"),
+                    r#type: String::from("superadmin"),
+                };
+
+                let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
+            }
+        }
 
         Ok(dynamodb)
     }
@@ -125,6 +134,7 @@ impl UserStore for Dynamodb {
         item.insert(String::from("first_name"), AV::S(user.first_name.clone()));
         item.insert(String::from("last_name"), AV::S(user.last_name.clone()));
         item.insert(String::from("user_type"), AV::S(user.r#type.clone()));
+        item.insert(String::from("is_active"), AV::Bool(user.is_active));
 
         self.client
             .put_item()
@@ -156,13 +166,20 @@ impl UserStore for Dynamodb {
             .client
             .get_item()
             .table_name(&self.table_name)
-            .key("PK", AV::S(email_key))
+            .key("PK", AV::S(email_key.clone()))
+            .key("SK", AV::S(email_key))
             .send()
             .await
         {
             Ok(response) => {
-                let email_record: Email = response.item.unwrap().into();
-                UserStore::get_user_by_id(self, &email_record.user_id).await
+                let response_item = response.clone().item;
+
+                if let Some(email_item) = response_item {
+                    let email_record: Email = email_item.into();
+                    UserStore::get_user_by_id(self, &email_record.user_id).await
+                } else {
+                    Err(anyhow!("email not found"))
+                }
             }
             Err(_e) => Err(anyhow!("email not found")),
         }
@@ -174,7 +191,8 @@ impl UserStore for Dynamodb {
             .client
             .get_item()
             .table_name(&self.table_name)
-            .key("PK", AV::S(key.into()))
+            .key("PK", AV::S(key.clone()))
+            .key("SK", AV::S(key.into()))
             .send()
             .await
         {
