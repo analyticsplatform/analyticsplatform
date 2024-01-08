@@ -1,6 +1,10 @@
 use crate::core::create_id;
 use crate::data::Database;
 use anyhow::Result;
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+    Argon2,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
@@ -11,6 +15,7 @@ pub struct User {
     pub last_name: String,
     pub r#type: String,
     pub is_active: bool,
+    pub hash: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -19,6 +24,7 @@ pub struct CreateUser {
     pub first_name: String,
     pub last_name: String,
     pub r#type: String,
+    pub password: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -39,6 +45,14 @@ impl User {
     }
 
     fn from_create_user(create_user: &CreateUser, id: &str, is_active: bool) -> User {
+        // Generate password hash
+        let salt = SaltString::generate(&mut OsRng);
+        let argon2 = Argon2::default();
+        let password_hash = argon2
+            .hash_password(create_user.password.as_bytes(), &salt)
+            .unwrap()
+            .to_string();
+
         User {
             id: id.to_string(),
             email: create_user.email.to_string(),
@@ -46,6 +60,7 @@ impl User {
             last_name: create_user.last_name.to_string(),
             r#type: create_user.r#type.to_string(),
             is_active,
+            hash: password_hash,
         }
     }
 }

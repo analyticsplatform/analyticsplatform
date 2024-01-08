@@ -70,6 +70,7 @@ impl Dynamodb {
                     first_name: String::from("Admin"),
                     last_name: String::from("Istrator"),
                     r#type: String::from("superadmin"),
+                    password: String::from("admin"),
                 };
 
                 let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
@@ -93,6 +94,7 @@ impl From<HashMap<String, AV>> for User {
             last_name: value.get("last_name").unwrap().as_s().unwrap().to_string(),
             is_active: *value.get("is_active").unwrap().as_bool().unwrap(),
             r#type: value.get("user_type").unwrap().as_s().unwrap().to_string(),
+            hash: value.get("hash").unwrap().as_s().unwrap().to_string(),
         };
         user
     }
@@ -135,6 +137,7 @@ impl UserStore for Dynamodb {
         item.insert(String::from("last_name"), AV::S(user.last_name.clone()));
         item.insert(String::from("user_type"), AV::S(user.r#type.clone()));
         item.insert(String::from("is_active"), AV::Bool(user.is_active));
+        item.insert(String::from("hash"), AV::S(user.hash.clone()));
 
         self.client
             .put_item()
