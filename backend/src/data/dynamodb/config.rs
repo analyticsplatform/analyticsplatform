@@ -226,12 +226,12 @@ impl SessionStore for Dynamodb {
     async fn create_session(&self, user: &User, session_id: &str) -> Result<()> {
         // Create the item to insert
         let mut item = std::collections::HashMap::new();
-        let key = format!("{}{}", "SESSION#", user.id);
+        let key = format!("{}{}", "SESSION#", session_id);
 
         item.insert(String::from("PK"), AV::S(key.clone()));
         item.insert(String::from("SK"), AV::S(key));
-        item.insert(String::from("GSI1PK"), AV::S(session_id.to_string()));
-        item.insert(String::from("GSI1SK"), AV::S(session_id.to_string()));
+        item.insert(String::from("GSI1PK"), AV::S(user.id.to_string()));
+        item.insert(String::from("GSI1SK"), AV::S(user.id.to_string()));
 
         self.client
             .put_item()
