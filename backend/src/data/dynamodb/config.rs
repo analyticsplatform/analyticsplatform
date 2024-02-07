@@ -111,9 +111,15 @@ impl From<HashMap<String, AV>> for Email {
 
 impl From<HashMap<String, AV>> for Session {
     fn from(value: HashMap<String, AV>) -> Self {
+        // user_id is None if unauthenticated
+        let user_id = match value.get("GSI1PK") {
+            Some(user_id_value) => Some(user_id_value.as_s().unwrap().to_string()),
+            None => None,
+        };
         Session {
             id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
-            user_id: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
+            user_id,
+            csrf_token: value.get("csrf_token").unwrap().as_s().unwrap().to_string(),
         }
     }
 }
@@ -218,12 +224,18 @@ impl SessionStore for Dynamodb {
             .send()
             .await
         {
-            Ok(response) => Ok(response.item.unwrap().into()),
+            Ok(response) => {
+                //sac
+                match response.item {
+                    Some(session_item) => Ok(session_item.into()),
+                    None => Err(anyhow!("session not found")),
+                }
+            }
             Err(_e) => Err(anyhow!("session not found")),
         }
     }
 
-    async fn create_session(&self, user: &User, session_id: &str) -> Result<()> {
+    async fn create_session(&self, user: &User, session_id: &str, csrf_token: &str) -> Result<()> {
         // Create the item to insert
         let mut item = std::collections::HashMap::new();
         let key = format!("{}{}", "SESSION#", session_id);
@@ -232,11 +244,24 @@ impl SessionStore for Dynamodb {
         item.insert(String::from("SK"), AV::S(key));
         item.insert(String::from("GSI1PK"), AV::S(user.id.to_string()));
         item.insert(String::from("GSI1SK"), AV::S(user.id.to_string()));
+        item.insert(String::from("csrf_token"), AV::S(csrf_token.into()));
 
         self.client
             .put_item()
             .table_name(&self.table_name)
             .set_item(Some(item))
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn delete_session(&self, session_id: &str) -> Result<()> {
+        let key = format!("SESSION#{session_id}");
+        self.client
+            .delete_item()
+            .table_name(&self.table_name)
+            .key("PK", AV::S(key.clone()))
+            .key("SK", AV::S(key))
             .send()
             .await?;
         Ok(())

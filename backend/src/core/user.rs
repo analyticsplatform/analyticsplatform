@@ -7,7 +7,7 @@ use argon2::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct User {
     pub id: String,
     pub email: String,
@@ -33,11 +33,25 @@ pub struct Email {
     pub user_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Profile {
+    pub id: String,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub r#type: String,
+    pub is_active: bool,
+}
+
 impl User {
     pub async fn create<T: Database>(database: T, user: &CreateUser) -> Result<()> {
         let user_id = create_id(10).await;
         let new_user = User::from_create_user(user, &user_id, true);
         database.create_user(&new_user).await
+    }
+
+    pub async fn from_id<T: Database>(database: T, id: &str) -> Result<User> {
+        database.get_user_by_id(id).await
     }
 
     pub async fn from_email<T: Database>(database: T, email: &str) -> Result<User> {
@@ -61,6 +75,19 @@ impl User {
             r#type: create_user.r#type.to_string(),
             is_active,
             hash: password_hash,
+        }
+    }
+}
+
+impl From<User> for Profile {
+    fn from(value: User) -> Self {
+        Profile {
+            id: value.id,
+            email: value.email,
+            first_name: value.first_name,
+            last_name: value.last_name,
+            r#type: value.r#type,
+            is_active: value.is_active,
         }
     }
 }
