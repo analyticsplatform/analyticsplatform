@@ -3,7 +3,7 @@ mod data;
 use argon2::{password_hash::PasswordHash, Argon2, PasswordVerifier};
 use axum::{
     debug_handler,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     middleware,
     response::{IntoResponse, Response},
@@ -12,12 +12,13 @@ use axum::{
 };
 use data::Database;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tower::ServiceBuilder;
 use tower_cookies::{Cookie, CookieManagerLayer};
 use tower_http::trace::{self, TraceLayer};
 use tracing::Level;
 
-use crate::core::{auth, CreateUser, Profile, Session, User};
+use crate::core::{auth, CreateOrg, CreateUser, Org, Profile, Session, User};
 use crate::data::Dynamodb;
 
 #[derive(Debug, Clone)]
@@ -36,6 +37,8 @@ async fn main() {
         .route("/logout", post(logout))
         .route("/profile", get(profile))
         .route("/users", post(create_user))
+        .route("/org", post(create_org))
+        .route("/org/:org_id", get(get_org))
         .layer(
             ServiceBuilder::new()
                 .layer(CookieManagerLayer::new())
@@ -132,4 +135,41 @@ async fn create_user<D: Database>(
         }
         _ => (StatusCode::UNAUTHORIZED, "user creation not permitted"),
     }
+}
+
+async fn create_org<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user): Extension<User>,
+    Json(payload): Json<CreateOrg>,
+) -> impl IntoResponse {
+    match user.r#type.as_str() {
+        "superadmin" => {
+            println!("creating org.");
+            match Org::create(state.db, &payload).await {
+                Ok(_) => {
+                    return (StatusCode::OK, "org created".into());
+                }
+                Err(_) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "org creation failed".into(),
+                    );
+                }
+            }
+        }
+        _ => (StatusCode::UNAUTHORIZED, "org creation not permitted"),
+    }
+}
+
+async fn get_org<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user): Extension<User>,
+    Path(org_id): Path<String>,
+) -> impl IntoResponse {
+    if user.r#type != "superadmin" {
+        return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+    }
+    // Get org from DB
+    let org = Org::from_id(state.db, &org_id).await.unwrap();
+    (StatusCode::OK, Json(org)).into_response()
 }

@@ -1,4 +1,4 @@
-use crate::core::{CreateUser, Email, Session, User};
+use crate::core::{CreateUser, Email, Org, Session, User};
 use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -124,6 +124,16 @@ impl From<HashMap<String, AV>> for Session {
     }
 }
 
+impl From<HashMap<String, AV>> for Org {
+    fn from(value: HashMap<String, AV>) -> Self {
+        Org {
+            id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
+            name: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
+            active: *value.get("is_active").unwrap().as_bool().unwrap(),
+        }
+    }
+}
+
 #[async_trait]
 impl UserStore for Dynamodb {
     async fn create_user(&self, user: &User) -> Result<()> {
@@ -208,6 +218,56 @@ impl UserStore for Dynamodb {
             Ok(response) => Ok(response.item.unwrap().into()),
             Err(_e) => Err(anyhow!("user not found")),
         }
+    }
+
+    async fn create_org(&self, org: &Org) -> Result<()> {
+        // Create the ORG item to insert
+        let mut item = std::collections::HashMap::new();
+        let key = format!("{}{}", "ORG#", org.id);
+        let name = format!("{}{}", "ORGNAME#", org.name);
+
+        item.insert(String::from("PK"), AV::S(key.clone()));
+        item.insert(String::from("SK"), AV::S(key.clone()));
+        item.insert(String::from("GSI1PK"), AV::S(name.clone()));
+        item.insert(String::from("GSI1SK"), AV::S(name.clone()));
+        item.insert(String::from("is_active"), AV::Bool(org.active));
+
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    async fn get_org_by_id(&self, id: &str) -> Result<Org> {
+        let key = format!("ORG#{id}");
+        match self
+            .client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("PK", AV::S(key.clone()))
+            .key("SK", AV::S(key.into()))
+            .send()
+            .await
+        {
+            Ok(response) => Ok(response.item.unwrap().into()),
+            Err(_e) => Err(anyhow!("user not found")),
+        }
+    }
+
+    async fn delete_org(&self, id: &str) -> Result<()> {
+        let key = format!("ORG#{id}");
+        self.client
+            .delete_item()
+            .table_name(&self.table_name)
+            .key("PK", AV::S(key.clone()))
+            .key("SK", AV::S(key))
+            .send()
+            .await?;
+        Ok(())
     }
 }
 
