@@ -7,6 +7,7 @@ use argon2::{
 };
 use serde::{Deserialize, Serialize};
 
+// TODO: Add orgs property which stores a list of org ids
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct User {
     pub id: String,

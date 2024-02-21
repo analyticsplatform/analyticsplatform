@@ -18,6 +18,11 @@ pub trait UserStore: Send + Sync + Clone + 'static {
 #[async_trait]
 pub trait SessionStore: Send + Sync + Clone + 'static {
     async fn get_session_by_id(&self, id: &str) -> Result<Session>;
-    async fn create_session(&self, user: &User, session_id: &str, csrf_token: &str) -> Result<()>;
+    async fn create_session(
+        &self,
+        user: Option<&'life1 User>,
+        session_id: &str,
+        csrf_token: &str,
+    ) -> Result<()>;
     async fn delete_session(&self, session_id: &str) -> Result<()>;
 }

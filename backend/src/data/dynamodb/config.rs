@@ -295,16 +295,24 @@ impl SessionStore for Dynamodb {
         }
     }
 
-    async fn create_session(&self, user: &User, session_id: &str, csrf_token: &str) -> Result<()> {
+    async fn create_session(
+        &self,
+        user: Option<&'life1 User>,
+        session_id: &str,
+        csrf_token: &str,
+    ) -> Result<()> {
         // Create the item to insert
         let mut item = std::collections::HashMap::new();
         let key = format!("{}{}", "SESSION#", session_id);
 
         item.insert(String::from("PK"), AV::S(key.clone()));
         item.insert(String::from("SK"), AV::S(key));
-        item.insert(String::from("GSI1PK"), AV::S(user.id.to_string()));
-        item.insert(String::from("GSI1SK"), AV::S(user.id.to_string()));
         item.insert(String::from("csrf_token"), AV::S(csrf_token.into()));
+
+        if let Some(u) = user {
+            item.insert(String::from("GSI1PK"), AV::S(u.id.to_string()));
+            item.insert(String::from("GSI1SK"), AV::S(u.id.to_string()));
+        }
 
         self.client
             .put_item()
