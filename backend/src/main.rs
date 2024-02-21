@@ -7,7 +7,7 @@ use axum::{
     http::StatusCode,
     middleware,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Extension, Json, Router,
 };
 use data::Database;
@@ -37,8 +37,9 @@ async fn main() {
         .route("/logout", post(logout))
         .route("/profile", get(profile))
         .route("/users", post(create_user))
-        .route("/org", post(create_org))
-        .route("/org/:org_id", get(get_org))
+        .route("/orgs", post(create_org))
+        .route("/orgs/:org_id", get(get_org))
+        .route("/orgs/:org_id", delete(delete_org))
         .layer(
             ServiceBuilder::new()
                 .layer(CookieManagerLayer::new())
@@ -172,4 +173,16 @@ async fn get_org<D: Database>(
     // Get org from DB
     let org = Org::from_id(state.db, &org_id).await.unwrap();
     (StatusCode::OK, Json(org)).into_response()
+}
+
+async fn delete_org<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user): Extension<User>,
+    Path(org_id): Path<String>,
+) -> impl IntoResponse {
+    if user.r#type != "superadmin" {
+        return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+    }
+    let _ = Org::delete(state.db, &org_id).await;
+    (StatusCode::OK, "ORG DELETED").into_response()
 }
