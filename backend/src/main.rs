@@ -13,25 +13,36 @@ use axum::{
 use data::Database;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_cookies::{Cookie, CookieManagerLayer};
 use tower_http::trace::{self, TraceLayer};
 use tracing::Level;
 
-use crate::core::{auth, CreateOrg, CreateUser, Org, Profile, Session, User};
+use crate::core::create_connections_from_env;
+use crate::core::{auth, Connection, CreateOrg, CreateUser, Org, Profile, Session, User};
 use crate::data::Dynamodb;
 
+// TODO: add connections property. It will store list of
+// connections/data sources which are updated during runtime
 #[derive(Debug, Clone)]
 struct AppState<D: Database> {
     db: D,
+    connections: Arc<HashMap<String, Box<dyn Connection>>>,
 }
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
+    let connections = create_connections_from_env().await;
+
     let database = Dynamodb::new(true, &"tower").await.unwrap();
-    let state = AppState { db: database };
+    let state = AppState {
+        db: database,
+        connections,
+    };
 
     let app = Router::new()
         .route("/logout", post(logout))
@@ -40,6 +51,7 @@ async fn main() {
         .route("/orgs", post(create_org))
         .route("/orgs/:org_id", get(get_org))
         .route("/orgs/:org_id", delete(delete_org))
+        .route("/datasets", get(get_datasets))
         .layer(
             ServiceBuilder::new()
                 .layer(CookieManagerLayer::new())
@@ -80,7 +92,7 @@ async fn login<D: Database>(
                 return (StatusCode::UNAUTHORIZED, response);
             }
 
-            let session = Session::create(state.db, &user).await.unwrap();
+            let session = Session::create(state.db, Some(&user)).await.unwrap();
             let cookie = Cookie::build(("sid", session.id))
                 .path("/")
                 .http_only(true)
@@ -185,4 +197,26 @@ async fn delete_org<D: Database>(
     }
     let _ = Org::delete(state.db, &org_id).await;
     (StatusCode::OK, "ORG DELETED").into_response()
+}
+
+async fn get_datasets<D: Database>(
+    State(state): State<AppState<D>>,
+    user: Option<Extension<User>>,
+) -> impl IntoResponse {
+    println!("User: {user:?}");
+    match state.connections.get("ABC123") {
+        Some(connection) => match connection.get_datasets().await {
+            Ok(datasets) => (StatusCode::OK, Json(json!(datasets))).into_response(),
+            Err(_e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "get_datasets: failed"})),
+            )
+                .into_response(),
+        },
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Connection not found"})),
+        )
+            .into_response(),
+    }
 }
