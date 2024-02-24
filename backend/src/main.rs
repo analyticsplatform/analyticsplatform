@@ -21,7 +21,9 @@ use tower_http::trace::{self, TraceLayer};
 use tracing::Level;
 
 use crate::core::create_connections_from_env;
-use crate::core::{auth, Connection, CreateOrg, CreateUser, Org, Profile, Session, User};
+use crate::core::{
+    auth, Connection, CreateOrg, CreateTeam, CreateUser, Org, Profile, Session, Team, User,
+};
 use crate::data::Dynamodb;
 
 // TODO: add connections property. It will store list of
@@ -38,7 +40,7 @@ async fn main() {
 
     let connections = create_connections_from_env().await;
 
-    let database = Dynamodb::new(true, &"tower").await.unwrap();
+    let database = Dynamodb::new(true, &"analyticsplatform").await.unwrap();
     let state = AppState {
         db: database,
         connections,
@@ -51,6 +53,8 @@ async fn main() {
         .route("/orgs", post(create_org))
         .route("/orgs/:org_id", get(get_org))
         .route("/orgs/:org_id", delete(delete_org))
+        .route("/teams", post(create_team))
+        .route("/teams/:team_id", get(get_team))
         .route("/datasets", get(get_datasets))
         .layer(
             ServiceBuilder::new()
@@ -219,4 +223,41 @@ async fn get_datasets<D: Database>(
         )
             .into_response(),
     }
+}
+
+async fn create_team<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user): Extension<User>,
+    Json(payload): Json<CreateTeam>,
+) -> impl IntoResponse {
+    match user.r#type.as_str() {
+        "superadmin" => {
+            println!("creating team.");
+            match Team::create(state.db, &payload).await {
+                Ok(_) => {
+                    return (StatusCode::OK, "team created".into());
+                }
+                Err(_) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "team creation failed".into(),
+                    );
+                }
+            }
+        }
+        _ => (StatusCode::UNAUTHORIZED, "team creation not permitted"),
+    }
+}
+
+async fn get_team<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user): Extension<User>,
+    Path(team_id): Path<String>,
+) -> impl IntoResponse {
+    if user.r#type != "superadmin" {
+        return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+    }
+    // TODO: Allow team members to view own teams
+    let team = Team::from_id(state.db, &team_id).await.unwrap();
+    (StatusCode::OK, Json(team)).into_response()
 }
