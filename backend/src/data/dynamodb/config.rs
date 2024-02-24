@@ -1,4 +1,4 @@
-use crate::core::{CreateUser, Email, Org, Session, User};
+use crate::core::{CreateUser, Email, Org, Session, Team, User};
 use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -6,7 +6,6 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::types::AttributeValue as AV;
 use aws_sdk_dynamodb::Client;
-use std::collections::HashMap;
 use tracing::{error, info};
 
 #[derive(Debug, Clone)]
@@ -78,59 +77,6 @@ impl Dynamodb {
         }
 
         Ok(dynamodb)
-    }
-}
-
-fn split_at_hash(input: &str) -> &str {
-    input.split_once('#').unwrap().1
-}
-
-impl From<HashMap<String, AV>> for User {
-    fn from(value: HashMap<String, AV>) -> Self {
-        let user = User {
-            id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
-            email: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
-            first_name: value.get("first_name").unwrap().as_s().unwrap().to_string(),
-            last_name: value.get("last_name").unwrap().as_s().unwrap().to_string(),
-            is_active: *value.get("is_active").unwrap().as_bool().unwrap(),
-            r#type: value.get("user_type").unwrap().as_s().unwrap().to_string(),
-            hash: value.get("hash").unwrap().as_s().unwrap().to_string(),
-        };
-        user
-    }
-}
-
-impl From<HashMap<String, AV>> for Email {
-    fn from(value: HashMap<String, AV>) -> Self {
-        Email {
-            email: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
-            user_id: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
-        }
-    }
-}
-
-impl From<HashMap<String, AV>> for Session {
-    fn from(value: HashMap<String, AV>) -> Self {
-        // user_id is None if unauthenticated
-        let user_id = match value.get("GSI1PK") {
-            Some(user_id_value) => Some(user_id_value.as_s().unwrap().to_string()),
-            None => None,
-        };
-        Session {
-            id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
-            user_id,
-            csrf_token: value.get("csrf_token").unwrap().as_s().unwrap().to_string(),
-        }
-    }
-}
-
-impl From<HashMap<String, AV>> for Org {
-    fn from(value: HashMap<String, AV>) -> Self {
-        Org {
-            id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
-            name: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
-            active: *value.get("is_active").unwrap().as_bool().unwrap(),
-        }
     }
 }
 
@@ -254,7 +200,7 @@ impl UserStore for Dynamodb {
             .await
         {
             Ok(response) => Ok(response.item.unwrap().into()),
-            Err(_e) => Err(anyhow!("user not found")),
+            Err(_e) => Err(anyhow!("org not found")),
         }
     }
 
@@ -268,6 +214,65 @@ impl UserStore for Dynamodb {
             .send()
             .await?;
         Ok(())
+    }
+
+    async fn create_team(&self, org: &Team) -> Result<()> {
+        // Create the ORG item to insert
+        let mut item = std::collections::HashMap::new();
+        let key = format!("TEAM#{}", org.id);
+        let name = format!("TEAMNAME#{}", org.name);
+
+        item.insert(String::from("PK"), AV::S(key.clone()));
+        item.insert(String::from("SK"), AV::S(key));
+        item.insert(String::from("GSI1PK"), AV::S(name.clone()));
+        item.insert(String::from("GSI1SK"), AV::S(name.clone()));
+        item.insert(String::from("GSI2PK"), AV::S("TYPE#TEAM".into()));
+        item.insert(String::from("is_active"), AV::Bool(org.active));
+
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    async fn get_teams(&self) -> Result<Vec<Team>> {
+        let query_output = self
+            .client
+            .query()
+            .table_name(&self.table_name)
+            .index_name("GSI2")
+            .key_condition_expression("GSI2PK = :T")
+            .expression_attribute_values(":T", AV::S("TYPE#TEAM".into()))
+            .send()
+            .await?;
+
+        match query_output.items {
+            Some(query_items) => Ok(query_items
+                .iter()
+                .map(|element| element.clone().into())
+                .collect::<Vec<Team>>()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    async fn get_team_by_id(&self, id: &str) -> Result<Team> {
+        let key = format!("TEAM#{id}");
+        match self
+            .client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("PK", AV::S(key.clone()))
+            .key("SK", AV::S(key.into()))
+            .send()
+            .await
+        {
+            Ok(response) => Ok(response.item.unwrap().into()),
+            Err(_e) => Err(anyhow!("team not found")),
+        }
     }
 }
 

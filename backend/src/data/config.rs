@@ -1,4 +1,4 @@
-use crate::core::{Org, Session, User};
+use crate::core::{Org, Session, Team, User};
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -13,6 +13,9 @@ pub trait UserStore: Send + Sync + Clone + 'static {
     async fn create_org(&self, org: &Org) -> Result<()>;
     async fn get_org_by_id(&self, id: &str) -> Result<Org>;
     async fn delete_org(&self, id: &str) -> Result<()>;
+    async fn create_team(&self, org: &Team) -> Result<()>;
+    async fn get_teams(&self) -> Result<Vec<Team>>;
+    async fn get_team_by_id(&self, id: &str) -> Result<Team>;
 }
 
 #[async_trait]
