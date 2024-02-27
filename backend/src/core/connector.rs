@@ -11,12 +11,12 @@ use std::fmt::Debug;
 //use crate::core::common::create_id;
 
 #[async_trait]
-pub trait Connection: Send + Sync + Debug {
+pub trait Connector: Send + Sync + Debug {
     // Define common methods for connections here
     async fn get_datasets(&self) -> Result<HashMap<String, Vec<String>>>;
 }
 
-pub async fn create_connections_from_env() -> Arc<HashMap<String, Box<dyn Connection>>> {
+pub async fn create_connections_from_env() -> Arc<HashMap<String, Box<dyn Connector>>> {
     let mut connections = HashMap::new();
 
     // Iterate over all environment variables
@@ -34,7 +34,7 @@ pub async fn create_connections_from_env() -> Arc<HashMap<String, Box<dyn Connec
 
             //let uuid = create_id(8).await;
             let uuid = String::from("ABC123");
-            connections.insert(uuid, Box::new(pool) as Box<dyn Connection>);
+            connections.insert(uuid, Box::new(pool) as Box<dyn Connector>);
         }
     }
 
@@ -42,9 +42,7 @@ pub async fn create_connections_from_env() -> Arc<HashMap<String, Box<dyn Connec
 }
 
 #[async_trait]
-impl Connection for Pool<Postgres> {
-    //
-
+impl Connector for Pool<Postgres> {
     async fn get_datasets(&self) -> Result<HashMap<String, Vec<String>>> {
         let rows = sqlx::query(
             "SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')"

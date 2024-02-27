@@ -22,7 +22,7 @@ use tracing::Level;
 
 use crate::core::create_connections_from_env;
 use crate::core::{
-    auth, Connection, CreateOrg, CreateTeam, CreateUser, Org, Profile, Session, Team, User,
+    auth, Connector, CreateOrg, CreateTeam, CreateUser, Org, Profile, Session, Team, User,
 };
 use crate::data::Dynamodb;
 
@@ -31,7 +31,7 @@ use crate::data::Dynamodb;
 #[derive(Debug, Clone)]
 struct AppState<D: Database> {
     db: D,
-    connections: Arc<HashMap<String, Box<dyn Connection>>>,
+    connections: Arc<HashMap<String, Box<dyn Connector>>>,
 }
 
 #[tokio::main]
