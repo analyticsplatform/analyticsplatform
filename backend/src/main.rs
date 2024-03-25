@@ -16,9 +16,8 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tower::ServiceBuilder;
-use tower_cookies::{Cookie, CookieManagerLayer};
 use tower_http::trace::{self, TraceLayer};
-use tracing::Level;
+use tracing::{info, Level};
 
 use crate::core::create_connections_from_env;
 use crate::core::{
@@ -56,11 +55,7 @@ async fn main() {
         .route("/teams", post(create_team))
         .route("/teams/:team_id", get(get_team))
         .route("/datasets", get(get_datasets))
-        .layer(
-            ServiceBuilder::new()
-                .layer(CookieManagerLayer::new())
-                .layer(middleware::from_fn_with_state(state.clone(), auth)),
-        )
+        .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(state.clone(), auth)))
         .route("/login", post(login))
         .with_state(state)
         .layer(
@@ -69,7 +64,7 @@ async fn main() {
                 .on_response(trace::DefaultOnResponse::new().level(Level::INFO)),
         );
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -79,11 +74,15 @@ struct LoginRequest {
     password: String,
 }
 
+#[derive(Serialize)]
+struct LoginResponse {
+    token: String,
+}
+
 async fn login<D: Database>(
     State(state): State<AppState<D>>,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    println!("{payload:?}");
     let user_response = User::from_email(state.db.clone(), &payload.email).await;
 
     match user_response {
@@ -97,20 +96,13 @@ async fn login<D: Database>(
             }
 
             let session = Session::create(state.db, Some(&user)).await.unwrap();
-            let cookie = Cookie::build(("sid", session.id))
-                .path("/")
-                .http_only(true)
-                .build();
-            let mut response: Response = Response::new("auth successful".into());
-            response
-                .headers_mut()
-                .insert("Set-Cookie", cookie.to_string().parse().unwrap());
+            let response = LoginResponse { token: session.id };
 
-            (StatusCode::OK, response)
+            (StatusCode::OK, Json(response).into_response())
         }
         Err(_) => {
-            println!("user search failed");
-            let response: Response = Response::new("auth failed".into());
+            info!("USER: search failed");
+            let response: Response = Response::new("ERROR: AUTH".into());
             (StatusCode::UNAUTHORIZED, response)
         }
     }
@@ -127,7 +119,6 @@ async fn logout<D: Database>(
 
 #[debug_handler]
 async fn profile(Extension(user): Extension<User>) -> impl IntoResponse {
-    println!("{user:?}");
     Json(Profile::from(user))
 }
 
