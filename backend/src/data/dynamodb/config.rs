@@ -28,7 +28,7 @@ impl Dynamodb {
                     .load()
                     .await;
                 aws_sdk_dynamodb::config::Builder::from(&defaults)
-                    .endpoint_url("http://localhost:8000")
+                    .endpoint_url("http://localhost:8090")
                     .build()
             }
             false => {
