@@ -61,7 +61,7 @@ pub async fn auth<D: Database>(
     request.extensions_mut().insert(session.clone());
     match session.user_id {
         Some(user_id) => {
-            info!("User ID found in session");
+            info!("User ID found in session: {}", user_id);
             let user_response = User::from_id(state.db, &user_id).await;
 
             match user_response {
