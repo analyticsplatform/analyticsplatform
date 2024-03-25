@@ -5,16 +5,15 @@ use axum::{
     extract::{Request, State},
     http::StatusCode,
     middleware::Next,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
-use tower_cookies::{Cookie, Cookies};
+use tracing::info;
 
 pub async fn auth<D: Database>(
     State(state): State<AppState<D>>,
-    cookies: Cookies,
     mut request: Request,
     next: Next,
-) -> impl IntoResponse {
+) -> Response {
     // Paths that can be accessed by anonymous users
     let anonymous_paths: Vec<&str> = vec!["/datasets"];
     let path: &str = request.uri().path();
@@ -24,35 +23,45 @@ pub async fn auth<D: Database>(
         .any(|prefix| path.starts_with(prefix));
     let allow_anonymous = allow_anonymous && request.method().as_str() == "GET";
 
-    if cookies.get("sid").is_none() && allow_anonymous {
-        println!("New Anonymous Access: Creating anonymous session");
+    let auth_header_value = request.headers().get("Authorization");
+
+    let token = if let Some(value) = auth_header_value {
+        let value = value.to_str().unwrap();
+        if value.starts_with("Bearer ") {
+            Some(value.trim_start_matches("Bearer ").to_string())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if token.is_none() && allow_anonymous {
+        info!("New Anonymous Access: Creating anonymous session");
         let session = Session::create(state.db, None).await.unwrap();
-        let cookie = Cookie::build(("sid", session.id))
-            .path("/")
-            .http_only(true)
-            .build();
         let mut response = next.run(request).await;
-        response
-            .headers_mut()
-            .insert("Set-Cookie", cookie.to_string().parse().unwrap());
+        response.headers_mut().insert(
+            "Authorization",
+            format!("Bearer {}", session.id).parse().unwrap(),
+        );
 
-        return (StatusCode::OK, response);
+        return (StatusCode::OK, response).into_response();
     }
 
-    if cookies.get("sid").is_none() && !allow_anonymous {
-        return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED".into_response());
+    if token.is_none() && !allow_anonymous {
+        return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
     }
 
-    let sid_cookie = cookies.get("sid").unwrap();
-    let session = match Session::from_id(state.db.clone(), sid_cookie.value()).await {
+    let token = token.unwrap();
+    let session = match Session::from_id(state.db.clone(), &token).await {
         Ok(s) => s,
-        Err(_) => return (StatusCode::UNAUTHORIZED, "Session Error".into_response()),
+        Err(_) => return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response(),
     };
 
     request.extensions_mut().insert(session.clone());
     match session.user_id {
         Some(user_id) => {
-            println!("User ID found in session");
+            info!("User ID found in session");
             let user_response = User::from_id(state.db, &user_id).await;
 
             match user_response {
@@ -60,18 +69,17 @@ pub async fn auth<D: Database>(
                     request.extensions_mut().insert(user);
                 }
                 Err(_) => {
-                    println!("User not found");
-                    return (StatusCode::UNAUTHORIZED, "User Error".into_response());
+                    info!("User not found");
+                    return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
                 }
             }
         }
         None => {
-            println!("Exisiting Anonymous Session");
+            info!("Exisiting Anonymous Session");
             let response = next.run(request).await;
-            return (StatusCode::OK, response);
+            return (StatusCode::OK, response).into_response();
         }
     }
     let response = next.run(request).await;
-    // do something with `response`...
-    (StatusCode::OK, response)
+    response.into_response()
 }
