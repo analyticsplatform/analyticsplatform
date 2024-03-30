@@ -1,4 +1,4 @@
-use crate::core::{CreateUser, Email, Org, Session, Team, User};
+use crate::core::{ConnectorDetails, CreateUser, Email, Org, Session, Team, User};
 use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -274,6 +274,57 @@ impl UserStore for Dynamodb {
             Err(_e) => Err(anyhow!("team not found")),
         }
     }
+
+    async fn create_connector(&self, conn: ConnectorDetails) -> Result<()> {
+        // Create the item to insert
+        let mut item = std::collections::HashMap::new();
+        let key = format!("{}{}", "CONNECTOR#", conn.id);
+        let gsi1 = format!("{}{}", "CONNECTORNAME#", conn.name);
+        let gsi2 = format!("{}", "TYPE#CONNECTOR");
+
+        item.insert(String::from("PK"), AV::S(key.clone()));
+        item.insert(String::from("SK"), AV::S(key));
+        item.insert(String::from("GSI1PK"), AV::S(gsi1.clone()));
+        item.insert(String::from("GSI1SK"), AV::S(gsi1));
+        item.insert(String::from("GSI2PK"), AV::S(gsi2.clone()));
+        item.insert(String::from("GSI2SK"), AV::S(gsi2));
+        item.insert(
+            String::from("connection_string"),
+            AV::S(conn.connection_string.into()),
+        );
+        item.insert(
+            String::from("connector_type"),
+            AV::S(conn.r#type.to_string()),
+        );
+
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn get_connectors(&self) -> Result<Vec<ConnectorDetails>> {
+        let query_output = self
+            .client
+            .query()
+            .table_name(&self.table_name)
+            .index_name("GSI2")
+            .key_condition_expression("GSI2PK = :T")
+            .expression_attribute_values(":T", AV::S("TYPE#CONNECTOR".into()))
+            .send()
+            .await?;
+
+        match query_output.items {
+            Some(query_items) => Ok(query_items
+                .iter()
+                .map(|element| element.clone().into())
+                .collect::<Vec<ConnectorDetails>>()),
+            None => Ok(Vec::new()),
+        }
+    }
 }
 
 #[async_trait]
@@ -300,23 +351,18 @@ impl SessionStore for Dynamodb {
         }
     }
 
-    async fn create_session(
-        &self,
-        user: Option<&'life1 User>,
-        session_id: &str,
-        csrf_token: &str,
-    ) -> Result<()> {
+    async fn create_session(&self, user: Option<&'life1 User>, session_id: &str) -> Result<()> {
         // Create the item to insert
         let mut item = std::collections::HashMap::new();
         let key = format!("{}{}", "SESSION#", session_id);
 
         item.insert(String::from("PK"), AV::S(key.clone()));
         item.insert(String::from("SK"), AV::S(key));
-        item.insert(String::from("csrf_token"), AV::S(csrf_token.into()));
 
         if let Some(u) = user {
-            item.insert(String::from("GSI1PK"), AV::S(u.id.to_string()));
-            item.insert(String::from("GSI1SK"), AV::S(u.id.to_string()));
+            let gsi1 = format!("{}{}", "USER#", u.id);
+            item.insert(String::from("GSI1PK"), AV::S(gsi1.clone()));
+            item.insert(String::from("GSI1SK"), AV::S(gsi1));
         }
 
         self.client

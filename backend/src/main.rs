@@ -10,6 +10,7 @@ use axum::{
     routing::{delete, get, post},
     Extension, Json, Router,
 };
+use core::{CreateConnector, UserExtension};
 use data::Database;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -19,9 +20,9 @@ use tower::ServiceBuilder;
 use tower_http::trace::{self, TraceLayer};
 use tracing::{info, Level};
 
-use crate::core::create_connections_from_env;
 use crate::core::{
-    auth, Connector, CreateOrg, CreateTeam, CreateUser, Org, Profile, Session, Team, User,
+    auth, Connector, ConnectorDetails, ConnectorTrait, ConnectorType, CreateOrg, CreateTeam,
+    CreateUser, Org, PostgresConnector, Profile, Session, Team, User,
 };
 use crate::data::Dynamodb;
 
@@ -30,16 +31,21 @@ use crate::data::Dynamodb;
 #[derive(Debug, Clone)]
 struct AppState<D: Database> {
     db: D,
-    connections: Arc<HashMap<String, Box<dyn Connector>>>,
+    connections: Arc<HashMap<String, Connector>>,
 }
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let connections = create_connections_from_env().await;
+    let _connections: Arc<HashMap<std::string::String, Connector>> = Arc::new(HashMap::new());
 
     let database = Dynamodb::new(true, &"analyticsplatform").await.unwrap();
+    let connections = Arc::new(
+        Connector::create_connectors(database.clone())
+            .await
+            .unwrap(),
+    );
     let state = AppState {
         db: database,
         connections,
@@ -54,9 +60,12 @@ async fn main() {
         .route("/orgs/:org_id", delete(delete_org))
         .route("/teams", post(create_team))
         .route("/teams/:team_id", get(get_team))
+        .route("/connectors", post(create_connector))
+        .route("/connectors", get(get_connectors))
         .route("/datasets", get(get_datasets))
         .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(state.clone(), auth)))
         .route("/login", post(login))
+        .route("/anonymouslogin", post(anonymous_login))
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()
@@ -108,6 +117,12 @@ async fn login<D: Database>(
     }
 }
 
+async fn anonymous_login<D: Database>(State(state): State<AppState<D>>) -> impl IntoResponse {
+    let session = Session::create(state.db, None).await.unwrap();
+    let response = LoginResponse { token: session.id };
+    (StatusCode::OK, Json(response).into_response())
+}
+
 async fn logout<D: Database>(
     State(state): State<AppState<D>>,
     Extension(session): Extension<Session>,
@@ -118,8 +133,12 @@ async fn logout<D: Database>(
 }
 
 #[debug_handler]
-async fn profile(Extension(user): Extension<User>) -> impl IntoResponse {
-    Json(Profile::from(user))
+async fn profile(Extension(user_ext): Extension<UserExtension>) -> impl IntoResponse {
+    if let Some(u) = user_ext.user {
+        Json(Profile::from(u)).into_response()
+    } else {
+        Json("None").into_response()
+    }
 }
 
 async fn create_user<D: Database>(
@@ -194,26 +213,72 @@ async fn delete_org<D: Database>(
     (StatusCode::OK, "ORG DELETED").into_response()
 }
 
+async fn create_connector<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user_ext): Extension<UserExtension>,
+    Json(payload): Json<CreateConnector>,
+) -> impl IntoResponse {
+    println!("payload: {:?}", payload);
+    let user = if let Some(u) = user_ext.user {
+        if u.r#type != "superadmin" {
+            return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+        }
+    };
+
+    println!("user: {:?}", user);
+
+    let _ = match payload.r#type {
+        ConnectorType::Postgres => {
+            println!("postgres create");
+            PostgresConnector::create_record(
+                state.db,
+                core::CreateConnector {
+                    name: payload.name,
+                    r#type: payload.r#type,
+                    connection_string: payload.connection_string,
+                },
+            )
+            .await
+        }
+    };
+
+    (StatusCode::OK, "CREATED").into_response()
+}
+
+async fn get_connectors<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user_ext): Extension<UserExtension>,
+) -> impl IntoResponse {
+    let user = if let Some(u) = user_ext.user {
+        if u.r#type != "superadmin" {
+            return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+        }
+    };
+    println!("user: {:?}", user);
+
+    let connector_details = ConnectorDetails::get_connector_details(state.db, true)
+        .await
+        .unwrap();
+    println!("conns: {:?}", connector_details);
+
+    (StatusCode::OK, Json(json!(connector_details))).into_response()
+}
+
+// TODO: Accept anonymous users with UserExtension
 async fn get_datasets<D: Database>(
     State(state): State<AppState<D>>,
-    user: Option<Extension<User>>,
+    Extension(user_ext): Extension<UserExtension>,
 ) -> impl IntoResponse {
-    println!("User: {user:?}");
-    match state.connections.get("ABC123") {
-        Some(connection) => match connection.get_datasets().await {
-            Ok(datasets) => (StatusCode::OK, Json(json!(datasets))).into_response(),
-            Err(_e) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "get_datasets: failed"})),
-            )
-                .into_response(),
-        },
-        None => (
-            StatusCode::NOT_FOUND,
-            Json(json!({"error": "Connection not found"})),
-        )
-            .into_response(),
-    }
+    let _user = if let Some(u) = user_ext.user {
+        if u.r#type != "superadmin" {
+            return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+        }
+    };
+
+    let conn = state.connections.get("AP Warehouse").unwrap();
+    let datasets = conn.get_datasets().await.unwrap();
+
+    (StatusCode::OK, Json(json!(datasets))).into_response()
 }
 
 async fn create_team<D: Database>(

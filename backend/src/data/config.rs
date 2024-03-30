@@ -1,4 +1,4 @@
-use crate::core::{Org, Session, Team, User};
+use crate::core::{ConnectorDetails, Org, Session, Team, User};
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -16,16 +16,14 @@ pub trait UserStore: Send + Sync + Clone + 'static {
     async fn create_team(&self, org: &Team) -> Result<()>;
     async fn get_teams(&self) -> Result<Vec<Team>>;
     async fn get_team_by_id(&self, id: &str) -> Result<Team>;
+    // Encrypt + Salt connection_string
+    async fn create_connector(&self, conn: ConnectorDetails) -> Result<()>;
+    async fn get_connectors(&self) -> Result<Vec<ConnectorDetails>>;
 }
 
 #[async_trait]
 pub trait SessionStore: Send + Sync + Clone + 'static {
     async fn get_session_by_id(&self, id: &str) -> Result<Session>;
-    async fn create_session(
-        &self,
-        user: Option<&'life1 User>,
-        session_id: &str,
-        csrf_token: &str,
-    ) -> Result<()>;
+    async fn create_session(&self, user: Option<&'life1 User>, session_id: &str) -> Result<()>;
     async fn delete_session(&self, session_id: &str) -> Result<()>;
 }

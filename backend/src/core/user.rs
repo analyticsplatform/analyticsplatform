@@ -20,6 +20,11 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UserExtension {
+    pub user: Option<User>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CreateUser {
     pub email: String,
     pub first_name: String,

@@ -1,4 +1,4 @@
-use crate::core::{Session, User};
+use crate::core::{Session, User, UserExtension};
 use crate::data::Database;
 use crate::AppState;
 use axum::{
@@ -15,7 +15,7 @@ pub async fn auth<D: Database>(
     next: Next,
 ) -> Response {
     // Paths that can be accessed by anonymous users
-    let anonymous_paths: Vec<&str> = vec!["/datasets"];
+    let anonymous_paths: Vec<&str> = vec!["/datasets", "/profile"];
     let path: &str = request.uri().path();
 
     let allow_anonymous = anonymous_paths
@@ -30,27 +30,11 @@ pub async fn auth<D: Database>(
         if value.starts_with("Bearer ") {
             Some(value.trim_start_matches("Bearer ").to_string())
         } else {
-            None
+            return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
         }
     } else {
-        None
-    };
-
-    if token.is_none() && allow_anonymous {
-        info!("New Anonymous Access: Creating anonymous session");
-        let session = Session::create(state.db, None).await.unwrap();
-        let mut response = next.run(request).await;
-        response.headers_mut().insert(
-            "Authorization",
-            format!("Bearer {}", session.id).parse().unwrap(),
-        );
-
-        return (StatusCode::OK, response).into_response();
-    }
-
-    if token.is_none() && !allow_anonymous {
         return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
-    }
+    };
 
     let token = token.unwrap();
     let session = match Session::from_id(state.db.clone(), &token).await {
@@ -66,7 +50,9 @@ pub async fn auth<D: Database>(
 
             match user_response {
                 Ok(user) => {
-                    request.extensions_mut().insert(user);
+                    request
+                        .extensions_mut()
+                        .insert(UserExtension { user: Some(user) });
                 }
                 Err(_) => {
                     info!("User not found");
@@ -76,6 +62,13 @@ pub async fn auth<D: Database>(
         }
         None => {
             info!("Exisiting Anonymous Session");
+            if !allow_anonymous {
+                return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
+            }
+            request
+                .extensions_mut()
+                .insert(UserExtension { user: None });
+
             let response = next.run(request).await;
             return (StatusCode::OK, response).into_response();
         }
