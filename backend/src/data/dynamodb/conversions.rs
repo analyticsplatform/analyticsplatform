@@ -1,4 +1,4 @@
-use crate::core::{ConnectorDetails, Email, Org, Session, Team, User};
+use crate::core::{ConnectorDetails, Dataset, Email, Org, Session, Team, User};
 use aws_sdk_dynamodb::types::AttributeValue as AV;
 use std::collections::HashMap;
 
@@ -67,7 +67,7 @@ impl From<HashMap<String, AV>> for Org {
 impl From<HashMap<String, AV>> for ConnectorDetails {
     fn from(value: HashMap<String, AV>) -> Self {
         ConnectorDetails {
-            id: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
+            id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
             name: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
             connection_string: value
                 .get("connection_string")
@@ -82,6 +82,49 @@ impl From<HashMap<String, AV>> for ConnectorDetails {
                 .unwrap()
                 .to_string()
                 .into(),
+        }
+    }
+}
+
+impl From<HashMap<String, AV>> for Dataset {
+    fn from(value: HashMap<String, AV>) -> Self {
+        Dataset {
+            id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
+            name: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
+            provider: Some(
+                value
+                    .get("provider")
+                    .unwrap_or(&AV::S("".to_string()))
+                    .as_s()
+                    .unwrap()
+                    .to_string(),
+            ),
+            connector_id: value
+                .get("connector_id")
+                .unwrap()
+                .as_s()
+                .unwrap()
+                .to_string(),
+            path: value.get("path").unwrap().as_s().unwrap().to_string(),
+            description: value
+                .get("description")
+                .unwrap()
+                .as_s()
+                .unwrap()
+                .to_string(),
+            schema: serde_json::from_str(value.get("schema").unwrap().as_s().unwrap()).unwrap(),
+            tags: serde_json::from_str(value.get("tags").unwrap().as_s().unwrap()).unwrap(),
+            metadata: value
+                .get("metadata")
+                .map(|metadata| {
+                    let metadata_str = metadata.as_s().unwrap();
+                    if metadata_str.is_empty() {
+                        None
+                    } else {
+                        Some(serde_json::from_str(metadata_str).unwrap())
+                    }
+                })
+                .unwrap_or(None),
         }
     }
 }

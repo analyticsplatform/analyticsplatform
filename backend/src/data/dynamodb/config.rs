@@ -1,4 +1,4 @@
-use crate::core::{ConnectorDetails, CreateUser, Email, Org, Session, Team, User};
+use crate::core::{ConnectorDetails, CreateUser, Dataset, Email, Org, Session, Team, User};
 use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -322,6 +322,71 @@ impl UserStore for Dynamodb {
                 .iter()
                 .map(|element| element.clone().into())
                 .collect::<Vec<ConnectorDetails>>()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    async fn create_dataset(&self, dataset: Dataset) -> Result<()> {
+        let mut item = std::collections::HashMap::new();
+        let key = format!("{}{}", "DATASET#", dataset.id);
+        let gsi1 = format!("{}{}", "DATASETNAME#", dataset.name);
+        let gsi2 = String::from("TYPE#DATASET");
+
+        item.insert(String::from("PK"), AV::S(key.clone()));
+        item.insert(String::from("SK"), AV::S(key));
+        item.insert(String::from("GSI1PK"), AV::S(gsi1.clone()));
+        item.insert(String::from("GSI1SK"), AV::S(gsi1));
+        item.insert(String::from("GSI2PK"), AV::S(gsi2.clone()));
+        item.insert(String::from("GSI2SK"), AV::S(gsi2));
+
+        if let Some(provider) = dataset.provider {
+            item.insert(String::from("provider"), AV::S(provider));
+        }
+        item.insert(String::from("connector_id"), AV::S(dataset.connector_id));
+        item.insert(String::from("path"), AV::S(dataset.path));
+        item.insert(String::from("description"), AV::S(dataset.description));
+        item.insert(
+            String::from("schema"),
+            AV::S(serde_json::to_string(&dataset.schema)?),
+        );
+        item.insert(
+            String::from("tags"),
+            AV::S(serde_json::to_string(&dataset.tags)?),
+        );
+        item.insert(
+            String::from("metadata"),
+            AV::S(dataset.metadata.as_ref().map_or_else(
+                || String::new(),
+                |metadata| serde_json::to_string(metadata).unwrap_or_default(),
+            )),
+        );
+
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    async fn get_datasets(&self) -> Result<Vec<Dataset>> {
+        let query_output = self
+            .client
+            .query()
+            .table_name(&self.table_name)
+            .index_name("GSI2")
+            .key_condition_expression("GSI2PK = :T")
+            .expression_attribute_values(":T", AV::S("TYPE#DATASET".into()))
+            .send()
+            .await?;
+
+        match query_output.items {
+            Some(query_items) => Ok(query_items
+                .iter()
+                .map(|element| element.clone().into())
+                .collect::<Vec<Dataset>>()),
             None => Ok(Vec::new()),
         }
     }

@@ -10,7 +10,7 @@ use axum::{
     routing::{delete, get, post},
     Extension, Json, Router,
 };
-use core::{CreateConnector, UserExtension};
+use core::{CreateConnector, CreateDataset, Dataset, UserExtension};
 use data::Database;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -63,6 +63,7 @@ async fn main() {
         .route("/connectors", post(create_connector))
         .route("/connectors", get(get_connectors))
         .route("/datasets", get(get_datasets))
+        .route("/dataset", post(create_dataset))
         .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(state.clone(), auth)))
         .route("/login", post(login))
         .route("/anonymouslogin", post(anonymous_login))
@@ -275,10 +276,24 @@ async fn get_datasets<D: Database>(
         }
     };
 
-    let conn = state.connections.get("AP Warehouse").unwrap();
-    let datasets = conn.get_datasets().await.unwrap();
+    let datasets = Dataset::get_all(state.db).await.unwrap();
 
     (StatusCode::OK, Json(json!(datasets))).into_response()
+}
+
+async fn create_dataset<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user_ext): Extension<UserExtension>,
+    Json(payload): Json<CreateDataset>,
+) -> impl IntoResponse {
+    let _user = if let Some(u) = user_ext.user {
+        if u.r#type != "superadmin" {
+            return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+        }
+    };
+
+    Dataset::create(state, payload).await.unwrap();
+    StatusCode::OK.into_response()
 }
 
 async fn create_team<D: Database>(
