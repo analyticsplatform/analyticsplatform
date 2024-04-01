@@ -16,8 +16,8 @@ const createSidebarItems = (pages: string[], currentPath: string) => {
 
   for (const page of pages) {
     const pageName = page.charAt(0).toUpperCase() + page.slice(1);
-    if (page == "overview") {
-      pageItems.push(<Sidebar.Item href="/" key={page} className={currentPath == "/" + page ? currentItemClassNames : itemClassNames}>{pageName}</Sidebar.Item>)
+    if (page == "dashboard") {
+      pageItems.push(<Sidebar.Item href="/" key={page} className={currentPath == "/" ? currentItemClassNames : itemClassNames}>{pageName}</Sidebar.Item>)
     } else {
       pageItems.push(<Sidebar.Item href={`/${page}`} key={page} className={currentPath == "/" + page ? currentItemClassNames : itemClassNames}>{pageName}</Sidebar.Item>)
     }
@@ -72,9 +72,9 @@ const MySidebar = () => {
   return (
     <>
       {/* Hamburger Menu Button - Shown only on mobile when sidebar is not open */}
-      <div className={`fixed top-0 left-0 z-40 ${isOpen ? 'hidden' : 'block'}`}>
+      <div className={`top-0 left-0 z-40 ${isOpen ? 'invisible' : 'block'}`}>
         <button
-          className="p-2 text-gray-600 hover:text-gray-900 md:hidden"
+          className='p-4 md:hidden text-blue-950'
           onClick={toggleSidebar}
           aria-label="Toggle sidebar"
         >
@@ -88,7 +88,7 @@ const MySidebar = () => {
       {/* Sidebar */}
       <div
         ref={sidebarRef}
-        className={`md:relative fixed inset-y-0 left-0  transform border-r-2 border-gray-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 ease-in-out z-30 md:flex md:flex-shrink-0`}
+        className={`fixed inset-y-0 left-0 transform border-r-2 border-gray-300 sb:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} sb:transition-none transition-transform duration-100 ease-in-out z-30`}
         style={{ width: '256px' }} // Adjust width as needed
       >
         <Sidebar theme={sidebarTheme}>
@@ -97,7 +97,7 @@ const MySidebar = () => {
           </Sidebar.Logo>
           <Sidebar.Items className="mt-[50%]">
             <Sidebar.ItemGroup>
-              {createSidebarItems(["overview", "data", "visualisations", "map"], pathname)}
+              {createSidebarItems(["dashboard", "data", "map"], pathname)}
             </Sidebar.ItemGroup>
           </Sidebar.Items>
         </Sidebar>
