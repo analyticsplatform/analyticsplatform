@@ -1,4 +1,6 @@
-use crate::core::{ConnectorDetails, CreateUser, Dataset, Email, Org, Session, Team, User};
+use crate::core::{
+    create_id, ConnectorDetails, CreateUser, Dataset, Email, Org, Session, Team, User,
+};
 use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -43,13 +45,13 @@ impl Dynamodb {
         let client = Client::from_conf(config);
 
         // Check if table exists
-        let resp = &client.list_tables().send().await.unwrap();
-        let tables = resp.table_names();
-
-        if !tables.contains(&table_name.to_string()) {
-            error!("table does not exist");
-            return Err(anyhow!(""));
-        }
+        let _ = match &client.describe_table().table_name(table_name).send().await {
+            Ok(_) => info!("Table found."),
+            Err(err) => {
+                error!("table connection error: {}", err);
+                return Err(anyhow!("table: connection error"));
+            }
+        };
 
         let dynamodb = Dynamodb {
             client: client.clone(),
@@ -64,12 +66,13 @@ impl Dynamodb {
             }
             Err(_) => {
                 info!("db init: creating admin user.");
+                let password = create_id(10).await;
                 let admin_user = CreateUser {
                     email: String::from("test@example.com"),
                     first_name: String::from("Admin"),
-                    last_name: String::from("Istrator"),
+                    last_name: String::from(password.clone()),
                     r#type: String::from("superadmin"),
-                    password: String::from("admin"),
+                    password: String::from(password),
                 };
 
                 let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
