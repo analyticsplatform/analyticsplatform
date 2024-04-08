@@ -15,6 +15,7 @@ use data::Database;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
+use std::env;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::trace::{self, TraceLayer};
@@ -38,9 +39,11 @@ struct AppState<D: Database> {
 async fn main() {
     tracing_subscriber::fmt::init();
 
+    let local = env::var("LOCAL").is_ok();
+    let table_name = env::var("TABLE_NAME").unwrap();
     let _connections: Arc<HashMap<std::string::String, Connector>> = Arc::new(HashMap::new());
 
-    let database = Dynamodb::new(true, &"analyticsplatform").await.unwrap();
+    let database = Dynamodb::new(local, &table_name).await.unwrap();
     let connections = Arc::new(
         Connector::create_connectors(database.clone())
             .await
