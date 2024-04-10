@@ -70,6 +70,7 @@ async fn main() {
         .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(state.clone(), auth)))
         .route("/login", post(login))
         .route("/anonymouslogin", post(anonymous_login))
+        .route("/health", get(health))
         .with_state(state)
         .layer(
             TraceLayer::new_for_http()
@@ -79,6 +80,11 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+#[debug_handler]
+async fn health() -> impl IntoResponse {
+    (StatusCode::OK, "healthy").into_response()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
