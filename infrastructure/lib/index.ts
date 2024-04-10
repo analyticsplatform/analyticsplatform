@@ -4,11 +4,13 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 
 export interface InfrastructureProps {
   vpc: ec2.IVpc;
+  listener: elbv2.ApplicationListener; 
 }
 
 export class Infrastructure extends Construct {
@@ -77,15 +79,30 @@ export class Infrastructure extends Construct {
       }),
     });
 
-    new ecs.FargateService(scope, "BackendService", {
+    const backendSecurityGroup = new ec2.SecurityGroup(this, 'BackendSecurityGroup', {
+      vpc: props.vpc,
+      description: 'Analytics Platform Backend',
+      allowAllOutbound: true,
+    });
+    backendSecurityGroup.connections.allowFrom(props.listener, ec2.Port.tcp(3001));
+
+    const backendService = new ecs.FargateService(scope, "BackendService", {
       cluster: ecsCluster,
       taskDefinition: backendTaskDefinition,
       desiredCount: 1,
       assignPublicIp: true,
       enableECSManagedTags: true,
       enableExecuteCommand: true,
+      securityGroups: [backendSecurityGroup],
       propagateTags: ecs.PropagatedTagSource.TASK_DEFINITION,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC }
+    });
+
+    props.listener.addTargets('BackendTargets', {
+      port: 3001,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targets: [backendService],
+      healthCheck: { path: "/health" }
     });
   }
 }
