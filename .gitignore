@@ -12,3 +12,5 @@ Cargo.lock
 
 # Local DB storage
 local/
+
+.DS_Store
