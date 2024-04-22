@@ -11,14 +11,14 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 export interface InfrastructureProps {
   vpc: ec2.IVpc;
   listener: elbv2.ApplicationListener; 
+  baseUrl: String,
 }
 
 export class Infrastructure extends Construct {
   constructor(scope: Construct, id: string, props: InfrastructureProps) {
     super(scope, id);
 
-    // Define construct contents here
-    const db = new dynamodb.TableV2(scope, 'DB', {
+    const backendDb = new dynamodb.TableV2(scope, 'DB', {
       partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       timeToLiveAttribute: 'expiry',
@@ -37,6 +37,17 @@ export class Infrastructure extends Construct {
       ],
     });
 
+    const frontendDb = new dynamodb.TableV2(scope, 'DBFrontend', {
+      partitionKey: { name: 'sessionid', type: dynamodb.AttributeType.STRING },
+
+      globalSecondaryIndexes: [
+        {
+          indexName: 'TOKENGSI',
+          partitionKey: { name: 'token', type: dynamodb.AttributeType.STRING },
+        },
+      ],
+    });
+
     const backendEcr = new ecr.Repository(scope, 'BackendRepository');
     const frontendEcr = new ecr.Repository(scope, 'FrontendRepository');
 
@@ -48,7 +59,7 @@ export class Infrastructure extends Construct {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       description: 'IAM role for Analytics Platform Backend ECS task',
     });
-    db.grantReadWriteData(backendEcsTaskRole);
+    backendDb.grantReadWriteData(backendEcsTaskRole);
 
     const backendTaskDefinition = new ecs.FargateTaskDefinition(scope, 'BackendTaskDefinition', {
       memoryLimitMiB: 512,
@@ -68,7 +79,7 @@ export class Infrastructure extends Construct {
       cpu: 256,
       portMappings: [{containerPort: 3001}],
       environment: {
-        TABLE_NAME: db.tableName
+        TABLE_NAME: backendDb.tableName
       },
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'BackendService',
@@ -99,6 +110,10 @@ export class Infrastructure extends Construct {
     });
 
     props.listener.addTargets('BackendTargets', {
+      conditions: [
+        elbv2.ListenerCondition.hostHeaders([`api.${props.baseUrl}`]),
+      ],
+      priority: 10,
       port: 3001,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [backendService],
