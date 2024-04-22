@@ -4,7 +4,23 @@ import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDownIcon } from '@heroicons/react/24/solid';
 
-const CustomAccordion = ({ data_info }) => {
+interface DataInfo {
+  name: string;
+  provider: string;
+  connector_id: string;
+  description: string;
+  id: string;
+  metadata: Record<string, any>;
+  path: string;
+  tags: string[];
+  schema: Record<string, any>;
+}
+
+interface CustomAccordionProps {
+  data_info: DataInfo;
+}
+
+const CustomAccordion = ({ data_info }: CustomAccordionProps) => {
   const [open, setOpen] = useState(false);
 
   const toggleAccordion = () => {

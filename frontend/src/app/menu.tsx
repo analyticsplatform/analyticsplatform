@@ -1,4 +1,7 @@
 "use client"
+
+// app/menu.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation'
 import { Sidebar } from 'flowbite-react';
@@ -20,6 +23,7 @@ const sidebarTheme: CustomFlowbiteTheme['sidebar'] = {
 const createSidebarItems = (pages: string[], currentPath: string) => {
   const itemClassNames = "text-blue-950 hover:bg-blue-600 hover:text-white";
   const currentItemClassNames = "bg-blue-600 text-white hover:bg-blue-600 hover:text-white";
+
   let pageItems = []
 
   for (const page of pages) {
@@ -30,13 +34,14 @@ const createSidebarItems = (pages: string[], currentPath: string) => {
       pageItems.push(<Sidebar.Item href={`/${page}`} key={page} className={currentPath == "/" + page ? currentItemClassNames : itemClassNames}>{pageName}</Sidebar.Item>)
     }
   }
+
   return (<>{pageItems}</>)
 }
 
 const MySidebar = () => {
   const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false); // controls visibility on mobile
-  const sidebarRef = useRef(null); // ref for the sidebar for detecting outside clicks
+  const sidebarRef = useRef<HTMLDivElement | null>(null); // ref for the sidebar for detecting outside clicks
 
   const toggleSidebar = () => {
     // Toggle only on mobile
@@ -47,8 +52,8 @@ const MySidebar = () => {
 
   // Detect all clicks on the document for mobile only
   useEffect(() => {
-    function handleClickOutside(event) {
-      if (window.innerWidth < 768 && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+    function handleClickOutside(event: MouseEvent) {
+      if (window.innerWidth < 768 && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
         setIsOpen(false); // Close the sidebar if click is outside
       }
     }
@@ -71,11 +76,9 @@ const MySidebar = () => {
 
     // Set initial state based on window size
     handleResize();
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
 
   return (
     <>
@@ -88,7 +91,7 @@ const MySidebar = () => {
         >
           {/* SVG for Hamburger Icon */}
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7"/>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
           </svg>
         </button>
       </div>
