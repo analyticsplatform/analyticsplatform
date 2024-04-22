@@ -1,21 +1,21 @@
 // app/layout.tsx
+
 import { Inter } from 'next/font/google';
 import { cookies } from 'next/headers';
-import { Suspense } from 'react';
+import { Suspense, ReactNode } from 'react';
+import SidebarNav from './menu';
 import "./globals.css";
-import dynamic from 'next/dynamic';
 
 const inter = Inter({
   weight: '400',
   subsets: ['latin']
 });
 
-const ProfileComponent = dynamic(() => import('./profile.tsx').then((mod) => mod.Profile), {
-  loading: () => <LoadingPage />,
-  ssr: true,
-});
+type RootLayoutProps = {
+  children: ReactNode;
+};
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <head>
@@ -24,7 +24,8 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         <div className="flex flex-col md:flex-row min-h-screen bg-sky-50">
           <Suspense fallback={<LoadingPage />}>
-            <ProfileComponent>{children}</ProfileComponent>
+            <SidebarNav />
+            <div className="flex-1 sb:ml-64">{children}</div>
           </Suspense>
         </div>
       </body>
