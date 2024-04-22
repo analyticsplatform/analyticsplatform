@@ -3,6 +3,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation'
 import { Sidebar } from 'flowbite-react';
 
+type CustomFlowbiteTheme = {
+  sidebar: {
+    root: {
+      inner: string;
+    };
+  };
+};
+
 const sidebarTheme: CustomFlowbiteTheme['sidebar'] = {
   root: {
     inner: 'h-full overflow-y-auto overflow-x-hidden py-4 px-3 bg-sky-100'
@@ -92,7 +100,7 @@ const MySidebar = () => {
         style={{ width: '256px' }} // Adjust width as needed
       >
         <Sidebar theme={sidebarTheme}>
-          <Sidebar.Logo href="#" className="mt-5 text-blue-900">
+          <Sidebar.Logo href="#" img="" className="mt-5 text-blue-900">
             Analytics Platform
           </Sidebar.Logo>
           <Sidebar.Items className="mt-[50%]">

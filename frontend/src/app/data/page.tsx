@@ -1,5 +1,5 @@
 import React from 'react';
-import Accordion from './accordion.tsx';
+import Accordion from './accordion';
 import { cookies } from 'next/headers';
 
 

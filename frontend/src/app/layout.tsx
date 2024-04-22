@@ -1,34 +1,43 @@
-import Link from 'next/link';
+// app/layout.tsx
 import { Inter } from 'next/font/google';
-import SidebarNav from './menu'
 import { cookies } from 'next/headers';
-import AuthHandler from './components/auth.ts';
-
+import { Suspense } from 'react';
 import "./globals.css";
+import dynamic from 'next/dynamic';
 
-// Load the "Inter" font with the "latin" subset specified
 const inter = Inter({
   weight: '400',
   subsets: ['latin']
 });
 
+const ProfileComponent = dynamic(() => import('./profile.tsx').then((mod) => mod.Profile), {
+  loading: () => <LoadingPage />,
+  ssr: true,
+});
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        {/* Head content */}
         <title>Analytics Platform</title>
       </head>
-      <body>
+      <body className={inter.className}>
         <div className="flex flex-col md:flex-row min-h-screen bg-sky-50">
-          <SidebarNav className="w-64 min-h-screen bg-apblue" />
-          <div className="flex-1 sb:ml-64">
-            {children}
-          </div>
+          <Suspense fallback={<LoadingPage />}>
+            <ProfileComponent>{children}</ProfileComponent>
+          </Suspense>
         </div>
-        <AuthHandler />
       </body>
     </html>
   );
 }
+
+const LoadingPage = () => {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="flex items-center justify-center w-full">
+        <div className="w-16 h-16 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+      </div>
+    </div>
+  );
+};

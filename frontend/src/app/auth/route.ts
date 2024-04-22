@@ -1,7 +1,7 @@
-// app/api/auth.js
-import { NextResponse } from 'next/server';
+// app/api/auth/route.ts
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request) {
+export async function GET(request: NextRequest) {
   const sid = await generateSessionId();
 
   // Set the 'sid' cookie in the response headers

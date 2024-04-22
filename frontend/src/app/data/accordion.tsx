@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDownIcon } from '@heroicons/react/24/solid';
 
@@ -50,7 +50,7 @@ const CustomAccordion = ({ data_info }) => {
                   <p><strong><u>Schema:</u></strong></p>
                   <ul className="list-disc pl-6">
                     {Object.entries(data_info.schema).map(([key, value]) => (
-                      <li key={key}><strong>{key}:</strong> {value}</li>
+                      <li key={key}><strong>{key}:</strong> {value as ReactNode}</li>
                     ))}
                   </ul>
                 </div>
