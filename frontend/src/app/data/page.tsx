@@ -34,6 +34,17 @@ async function getDatasets() {
   }
 }
 
+const exampleDataset = {
+  name: "Population",
+  provider: "Department of Planets",
+  connector_id: "ABC123",
+  description: "How many people are there in the world?",
+  id: "123ABC",
+  metadata: {"requested_by": "someone"},
+  path: "warehouse.data",
+  tags: ["world"],
+  schema: {"planet": "string", "value": "number"}
+}
 
 export default async function Data() {
   const cookieStore = cookies();
@@ -55,14 +66,16 @@ export default async function Data() {
 
     return (
       <main className="flex flex-col min-h-screen items-start p-6 lg:p-24">
-        <h1 className="w-full mb-8 text-2xl font-bold text-blue-950 md:text-4xl dark:text-white text-left">Starting session</h1>
-        <script dangerouslySetInnerHTML={{
-          __html: `
-            setTimeout(function() {
-              window.location.reload();
-            }, 1000);
-          `
-        }} />
+        <h1 className="w-full mb-8 text-2xl font-bold text-blue-950 md:text-4xl dark:text-white text-left">Data</h1>
+        <div className="w-full">
+          <Accordion data_info={exampleDataset}/>
+          <Accordion data_info={exampleDataset}/>
+          <Accordion data_info={exampleDataset}/>
+          <Accordion data_info={exampleDataset}/>
+          <Accordion data_info={exampleDataset}/>
+          <Accordion data_info={exampleDataset}/>
+          <Accordion data_info={exampleDataset}/>
+        </div>
       </main>
     );
   }
