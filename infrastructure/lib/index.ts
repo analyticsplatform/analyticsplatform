@@ -37,7 +37,7 @@ export class Infrastructure extends Construct {
       ],
     });
 
-    const frontendDb = new dynamodb.TableV2(scope, 'DBFrontend', {
+    const uiDb = new dynamodb.TableV2(scope, 'DBui', {
       partitionKey: { name: 'sessionid', type: dynamodb.AttributeType.STRING },
 
       globalSecondaryIndexes: [
@@ -49,7 +49,7 @@ export class Infrastructure extends Construct {
     });
 
     const backendEcr = new ecr.Repository(scope, 'BackendRepository');
-    const frontendEcr = new ecr.Repository(scope, 'FrontendRepository');
+    const uiEcr = new ecr.Repository(scope, 'uiRepository');
 
     const ecsCluster = new ecs.Cluster(scope, 'Cluster', {
       vpc: props.vpc
@@ -118,6 +118,71 @@ export class Infrastructure extends Construct {
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [backendService],
       healthCheck: { path: "/health" }
+    });
+
+    const uiEcsTaskRole = new iam.Role(this, 'UiEcsTaskRole', {
+      assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      description: 'IAM role for Analytics Platform UI ECS task',
+    });
+    uiDb.grantReadWriteData(uiEcsTaskRole);
+
+    const uiTaskDefinition = new ecs.FargateTaskDefinition(scope, 'UiTaskDefinition', {
+      memoryLimitMiB: 512,
+      cpu: 256,
+      taskRole: uiEcsTaskRole,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX
+      }
+    });
+
+    uiTaskDefinition.addContainer('UiContainer', {
+      image: ecs.ContainerImage.fromEcrRepository(uiEcr),
+      essential: true,
+      memoryReservationMiB: 512,
+      memoryLimitMiB: 512,
+      cpu: 256,
+      portMappings: [{containerPort: 3000}],
+      environment: {
+        TABLE_NAME: uiDb.tableName
+      },
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'UiService',
+        logGroup: new logs.LogGroup(scope, 'AnalyticsPlatformUiLogGroup', {
+          logGroupName: 'AnalyticsPlatformUi',
+          retention: logs.RetentionDays.ONE_WEEK,
+        }),
+      }),
+    });
+
+    const uiSecurityGroup = new ec2.SecurityGroup(this, 'UiSecurityGroup', {
+      vpc: props.vpc,
+      description: 'Analytics Platform UI',
+      allowAllOutbound: true,
+    });
+    uiSecurityGroup.connections.allowFrom(props.listener, ec2.Port.tcp(3000));
+//
+    const uiService = new ecs.FargateService(scope, "UiService", {
+      cluster: ecsCluster,
+      taskDefinition: uiTaskDefinition,
+      desiredCount: 1,
+      assignPublicIp: true,
+      enableECSManagedTags: true,
+      enableExecuteCommand: true,
+      securityGroups: [uiSecurityGroup],
+      propagateTags: ecs.PropagatedTagSource.TASK_DEFINITION,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC }
+    });
+
+    props.listener.addTargets('UiTargets', {
+      conditions: [
+        elbv2.ListenerCondition.hostHeaders([props.baseUrl as string]),
+      ],
+      priority: 9,
+      port: 3000,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targets: [uiService],
+      healthCheck: { path: "/" }
     });
   }
 }
