@@ -2,15 +2,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { getSession, setSession } from './app/lib/db';
+import { getDb } from './app/lib/db';
 
 async function createNewSession(request: NextRequest, response: NextResponse) {
   const newSessionId = uuidv4();
   const timestamp = Date.now();
-  const clientIpAddress = request.ip || '';
+
+  const ipHeader = request.headers.get('X-Forwarded-For');
+  const clientIpAddress = ipHeader ? ipHeader.split(/, /)[0] : '';
 
   try {
-    await setSession(newSessionId, { timestamp, clientIpAddress });
+    const db = await getDb();
+    await db.setSession(newSessionId, { timestamp, clientIpAddress });
 
     response.cookies.set('sid', newSessionId, {
       httpOnly: true,
@@ -36,7 +39,8 @@ export async function middleware(request: NextRequest) {
     const sessionId = sidCookie.value;
 
     try {
-      const sessionData = await getSession(sessionId);
+      const db = await getDb();
+      const sessionData = await db.getSession(sessionId);
 
       if (!sessionData) {
         // Session not found in the database, create a new session
@@ -57,6 +61,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // The above middleware would only run for the "/" and "/data" paths
-  matcher: ['/', '/data'],
+  // The above middleware would only run for the "/", "/data", and "/map" paths
+  matcher: ['/', '/data', '/map'],
 };
