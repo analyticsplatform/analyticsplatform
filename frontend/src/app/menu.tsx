@@ -5,6 +5,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation'
 import { Sidebar } from 'flowbite-react';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import DataUsageIcon from '@mui/icons-material/DataUsage';
+import MapIcon from '@mui/icons-material/Map';
 
 type CustomFlowbiteTheme = {
   sidebar: {
@@ -23,20 +26,45 @@ const sidebarTheme: CustomFlowbiteTheme['sidebar'] = {
 const createSidebarItems = (pages: string[], currentPath: string) => {
   const itemClassNames = "text-blue-950 hover:bg-blue-600 hover:text-white";
   const currentItemClassNames = "bg-blue-600 text-white hover:bg-blue-600 hover:text-white";
-
-  let pageItems = []
+  let pageItems = [];
 
   for (const page of pages) {
     const pageName = page.charAt(0).toUpperCase() + page.slice(1);
+    let icon;
+
+    switch (page) {
+      case 'dashboard':
+        icon = <DashboardIcon className="mr-2" />;
+        break;
+      case 'data':
+        icon = <DataUsageIcon className="mr-2" />;
+        break;
+      case 'map':
+        icon = <MapIcon className="mr-2" />;
+        break;
+      default:
+        icon = null;
+    }
+
     if (page == "dashboard") {
-      pageItems.push(<Sidebar.Item href="/" key={page} className={currentPath == "/" ? currentItemClassNames : itemClassNames}>{pageName}</Sidebar.Item>)
+      pageItems.push(
+        <Sidebar.Item href="/" key={page} className={currentPath == "/" ? currentItemClassNames : itemClassNames}>
+          {icon}
+          {pageName}
+        </Sidebar.Item>
+      );
     } else {
-      pageItems.push(<Sidebar.Item href={`/${page}`} key={page} className={currentPath == "/" + page ? currentItemClassNames : itemClassNames}>{pageName}</Sidebar.Item>)
+      pageItems.push(
+        <Sidebar.Item href={`/${page}`} key={page} className={currentPath == "/" + page ? currentItemClassNames : itemClassNames}>
+          {icon}
+          {pageName}
+        </Sidebar.Item>
+      );
     }
   }
 
-  return (<>{pageItems}</>)
-}
+  return (<>{pageItems}</>);
+};
 
 const MySidebar = () => {
   const pathname = usePathname()
