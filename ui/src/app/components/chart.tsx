@@ -49,7 +49,6 @@ const Chart: React.FC<ChartProps> = ({ data, type }) => {
   useEffect(() => {
     if (chartRef.current) {
       const ctx = chartRef.current.getContext('2d');
-
       if (ctx) {
         new ChartJS(ctx, {
           type,
@@ -60,6 +59,27 @@ const Chart: React.FC<ChartProps> = ({ data, type }) => {
             scales: {
               y: {
                 beginAtZero: true,
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.05)',
+                },
+                ticks: {
+                  color: 'rgba(0, 0, 0, 0.6)',
+                },
+              },
+              x: {
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.05)',
+                },
+                ticks: {
+                  color: 'rgba(0, 0, 0, 0.6)',
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: 'rgba(0, 0, 0, 0.6)',
+                },
               },
             },
           },
@@ -69,7 +89,7 @@ const Chart: React.FC<ChartProps> = ({ data, type }) => {
   }, [data, type]);
 
   return (
-    <div className="bg-white shadow-md rounded-md p-4 h-full">
+    <div className="bg-white shadow-lg rounded-lg p-6 h-full">
       <canvas ref={chartRef} />
     </div>
   );
