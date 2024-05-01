@@ -22,7 +22,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <title>Analytics Platform</title>
       </head>
       <body className={inter.className}>
-        <div className="flex flex-col md:flex-row min-h-screen bg-sky-50">
+        <div className="flex flex-col md:flex-row min-h-screen bg-gray-100">
           <Suspense fallback={<LoadingPage />}>
             <SidebarNav />
             <div className="flex-1 sb:ml-64">{children}</div>
