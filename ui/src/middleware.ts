@@ -1,66 +1,80 @@
 // middleware.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { v4 as uuidv4 } from 'uuid';
-import { getDb } from './app/lib/db';
 
-async function createNewSession(request: NextRequest, response: NextResponse) {
-  const newSessionId = uuidv4();
-  const timestamp = Date.now();
+export async function middleware(request: NextRequest) {
+  const sidCookie = request.cookies.get('sid');
 
-  const ipHeader = request.headers.get('X-Forwarded-For');
-  const clientIpAddress = ipHeader ? ipHeader.split(/, /)[0] : '';
-
-  try {
-    const db = await getDb();
-    await db.setSession(newSessionId, { timestamp, clientIpAddress });
-
-    response.cookies.set('sid', newSessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-      path: '/',
+  if (!sidCookie || !sidCookie.value) {
+    // sid cookie missing or invalid, create a new session
+    const clientIpAddress = request.headers.get('x-forwarded-for') || request.ip;
+    const response = await fetch('http://localhost:3000/auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ clientIpAddress }),
     });
 
-    console.log(`Created new session with sessionId: ${newSessionId}`);
-  } catch (error) {
-    console.error('Error creating session:', error);
-    // Handle the error appropriately (e.g., return an error response)
-  }
-}
-
-// Used to check for cookie existence and session validity.
-export async function middleware(request: NextRequest) {
-  const response = NextResponse.next();
-  const sidCookie = request.cookies.get('sid');
-  console.log(sidCookie);
-
-  if (sidCookie && sidCookie.value) {
-    const sessionId = sidCookie.value;
-
-    try {
-      const db = await getDb();
-      const sessionData = await db.getSession(sessionId);
-
-      if (!sessionData) {
-        // Session not found in the database, create a new session
-        await createNewSession(request, response);
-      } else {
-        console.log(`Session found with sessionId: ${sessionId}`);
-      }
-    } catch (error) {
-      console.error('Error retrieving or creating session:', error);
+    if (response.ok) {
+      const data = await response.json();
+      const sessionId = data.sessionId;
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+        path: '/',
+      };
+      const newResponse = NextResponse.next();
+      newResponse.cookies.set('sid', sessionId, cookieOptions);
+      return newResponse;
+    } else {
       // Handle the error appropriately (e.g., return an error response)
+      return NextResponse.error();
     }
   } else {
-    // sid cookie missing or invalid, create a new session
-    await createNewSession(request, response);
-  }
+    // sid cookie exists, retrieve the session
+    const response = await fetch(`http://localhost:3000/auth?sessionId=${sidCookie.value}`, {
+      method: 'GET',
+    });
 
-  return response;
+    if (response.ok) {
+      // Session is valid, continue to the intended route
+      return NextResponse.next();
+    } else if (response.status === 401) {
+      // Session is invalid, create a new session
+      const clientIpAddress = request.headers.get('x-forwarded-for') || request.ip;
+      const createResponse = await fetch('http://localhost:3000/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ clientIpAddress }),
+      });
+
+      if (createResponse.ok) {
+        const data = await createResponse.json();
+        const sessionId = data.sessionId;
+        const cookieOptions = {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 60 * 60 * 24 * 7, // 1 week
+          path: '/',
+        };
+        const newResponse = NextResponse.next();
+        newResponse.cookies.set('sid', sessionId, cookieOptions);
+        return newResponse;
+      } else {
+        // Handle the error appropriately (e.g., return an error response)
+        return NextResponse.error();
+      }
+    } else {
+      // Handle other error statuses appropriately
+      return NextResponse.error();
+    }
+  }
 }
 
 export const config = {
-  // The above middleware would only run for the "/", "/data", and "/map" paths
   matcher: ['/', '/data', '/map'],
 };

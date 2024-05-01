@@ -4,6 +4,8 @@
 
 import { DynamoDB } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
+
 
 class DynamoDBClient {
   private client: DynamoDB;
@@ -50,24 +52,24 @@ class DynamoDBClient {
   }
 }
 
-async function getDb() {
-  const client = process.env.LOCAL
-    ? new DynamoDB({
-        region: 'localhost',
-        endpoint: 'http://localhost:8090',
-        credentials: {
-          accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-        },
-      })
-    : new DynamoDB({
-      region: process.env.AWS_REGION,
+function getDb() {
+  let client;
+  if (process.env.IS_LOCAL) {
+    client = new DynamoDB({
+      region: 'localhost',
+      endpoint: 'http://localhost:8090',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-        sessionToken: process.env.AWS_SESSION_TOKEN || '',
-      }
+      },
     });
+  } else {
+    // Inside ECS container
+    client = new DynamoDB({
+      region: process.env.AWS_REGION,
+      credentials: fromNodeProviderChain()
+    });
+  }
 
   const tableName = process.env.TABLE_NAME || '';
   return new DynamoDBClient(client, tableName);
