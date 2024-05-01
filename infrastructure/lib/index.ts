@@ -182,7 +182,7 @@ export class Infrastructure extends Construct {
       port: 3000,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [uiService],
-      healthCheck: { path: "/" }
+      healthCheck: { path: "/health" }
     });
   }
 }
