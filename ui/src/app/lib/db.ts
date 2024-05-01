@@ -17,7 +17,7 @@ class DynamoDBClient {
   }
 
   async getSession(sessionId: string) {
-    const params = {
+    const getParams = {
       TableName: this.tableName,
       Key: marshall({
         sessionid: sessionId,
@@ -25,8 +25,29 @@ class DynamoDBClient {
     };
 
     try {
-      const { Item } = await this.client.getItem(params);
-      return Item ? unmarshall(Item) : null;
+      const { Item } = await this.client.getItem(getParams);
+      const session = Item ? unmarshall(Item) : null;
+
+      if (session) {
+        const updateParams = {
+          TableName: this.tableName,
+          Key: marshall({
+            sessionid: sessionId,
+          }),
+          UpdateExpression: 'SET #requests = if_not_exists(#requests, :zero) + :incr',
+          ExpressionAttributeNames: {
+            '#requests': 'requests',
+          },
+          ExpressionAttributeValues: marshall({
+            ':zero': 0,
+            ':incr': 1,
+          }),
+        };
+
+        await this.client.updateItem(updateParams);
+      }
+
+      return session;
     } catch (error) {
       console.error('Error retrieving record:', error);
       throw error;
@@ -36,17 +57,26 @@ class DynamoDBClient {
   async setSession(sessionId: string, data: Record<string, any>) {
     const params = {
       TableName: this.tableName,
-      Item: marshall({
+      Key: marshall({
         sessionid: sessionId,
-        ...data,
+      }),
+      UpdateExpression: 'SET #data = :data, #requests = if_not_exists(#requests, :zero) + :incr',
+      ExpressionAttributeNames: {
+        '#data': 'data',
+        '#requests': 'requests',
+      },
+      ExpressionAttributeValues: marshall({
+        ':data': data,
+        ':zero': 0,
+        ':incr': 1,
       }),
     };
 
     try {
-      await this.client.putItem(params);
-      console.log(`Record created with sessionId: ${sessionId}`);
+      await this.client.updateItem(params);
+      console.log(`Record updated with sessionId: ${sessionId}`);
     } catch (error) {
-      console.error('Error creating record:', error);
+      console.error('Error updating record:', error);
       throw error;
     }
   }
