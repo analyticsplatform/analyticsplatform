@@ -53,11 +53,10 @@ impl ConnectorTrait for PostgresConnector {
         let schema_name = parts[0];
         let table_name = parts[1];
 
-        let query = format!(
-            "SELECT column_name, data_type 
+        let query = "SELECT column_name, data_type 
          FROM information_schema.columns
          WHERE table_schema = $1 AND table_name = $2"
-        );
+            .to_string();
 
         let rows = sqlx::query(&query)
             .bind(schema_name)

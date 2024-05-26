@@ -21,11 +21,11 @@ pub async fn create_user<D: Database>(
             match User::create(state.db, &payload).await {
                 Ok(_) => {
                     println!("user created successfully");
-                    (StatusCode::OK, "user created".into())
+                    (StatusCode::OK, "user created")
                 }
                 Err(_) => {
                     println!("user creation failed");
-                    (StatusCode::INTERNAL_SERVER_ERROR, "Error".into())
+                    (StatusCode::INTERNAL_SERVER_ERROR, "Error")
                 }
             }
         }

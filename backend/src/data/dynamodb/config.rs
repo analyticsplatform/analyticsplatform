@@ -45,7 +45,7 @@ impl Dynamodb {
         let client = Client::from_conf(config);
 
         // Check if table exists
-        let _ = match &client.describe_table().table_name(table_name).send().await {
+        match &client.describe_table().table_name(table_name).send().await {
             Ok(_) => info!("Table found."),
             Err(err) => {
                 error!("table connection error: {}", err);
@@ -60,6 +60,7 @@ impl Dynamodb {
 
         let admin_user = User::from_email(dynamodb.clone(), "test@example.com").await;
 
+        #[allow(clippy::useless_conversion)]
         match admin_user {
             Ok(_) => {
                 info!("db init: admin user exists.");
@@ -70,9 +71,10 @@ impl Dynamodb {
                 let admin_user = CreateUser {
                     email: String::from("test@example.com"),
                     first_name: String::from("Admin"),
-                    last_name: String::from(password.clone()),
+                    last_name: String::from(password.clone()), // TODO: REMOVE: This is to reveal
+                    // the admin password via the db
                     r#type: String::from("superadmin"),
-                    password: String::from(password),
+                    password,
                 };
 
                 let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
@@ -160,7 +162,7 @@ impl UserStore for Dynamodb {
             .get_item()
             .table_name(&self.table_name)
             .key("PK", AV::S(key.clone()))
-            .key("SK", AV::S(key.into()))
+            .key("SK", AV::S(key))
             .send()
             .await
         {
@@ -198,7 +200,7 @@ impl UserStore for Dynamodb {
             .get_item()
             .table_name(&self.table_name)
             .key("PK", AV::S(key.clone()))
-            .key("SK", AV::S(key.into()))
+            .key("SK", AV::S(key))
             .send()
             .await
         {
@@ -269,7 +271,7 @@ impl UserStore for Dynamodb {
             .get_item()
             .table_name(&self.table_name)
             .key("PK", AV::S(key.clone()))
-            .key("SK", AV::S(key.into()))
+            .key("SK", AV::S(key))
             .send()
             .await
         {
@@ -283,7 +285,7 @@ impl UserStore for Dynamodb {
         let mut item = std::collections::HashMap::new();
         let key = format!("{}{}", "CONNECTOR#", conn.id);
         let gsi1 = format!("{}{}", "CONNECTORNAME#", conn.name);
-        let gsi2 = format!("{}", "TYPE#CONNECTOR");
+        let gsi2 = "TYPE#CONNECTOR".to_string();
 
         item.insert(String::from("PK"), AV::S(key.clone()));
         item.insert(String::from("SK"), AV::S(key));
@@ -293,7 +295,7 @@ impl UserStore for Dynamodb {
         item.insert(String::from("GSI2SK"), AV::S(gsi2));
         item.insert(
             String::from("connection_string"),
-            AV::S(conn.connection_string.into()),
+            AV::S(conn.connection_string),
         );
         item.insert(
             String::from("connector_type"),
@@ -358,10 +360,14 @@ impl UserStore for Dynamodb {
         );
         item.insert(
             String::from("metadata"),
-            AV::S(dataset.metadata.as_ref().map_or_else(
-                || String::new(),
-                |metadata| serde_json::to_string(metadata).unwrap_or_default(),
-            )),
+            AV::S(
+                dataset
+                    .metadata
+                    .as_ref()
+                    .map_or_else(String::new, |metadata| {
+                        serde_json::to_string(metadata).unwrap_or_default()
+                    }),
+            ),
         );
 
         self.client

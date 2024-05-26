@@ -32,11 +32,10 @@ impl From<HashMap<String, AV>> for Email {
 
 impl From<HashMap<String, AV>> for Session {
     fn from(value: HashMap<String, AV>) -> Self {
-        // user_id is None if unauthenticated
-        let user_id = match value.get("GSI1PK") {
-            Some(user_id_value) => Some(split_at_hash(user_id_value.as_s().unwrap()).to_string()),
-            None => None,
-        };
+        let user_id = value
+            .get("GSI1PK")
+            .map(|user_id_value| split_at_hash(user_id_value.as_s().unwrap()).to_string());
+
         Session {
             id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
             user_id,
