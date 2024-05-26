@@ -14,22 +14,14 @@ pub async fn create_org<D: Database>(
     Extension(user): Extension<User>,
     Json(payload): Json<CreateOrg>,
 ) -> impl IntoResponse {
-    match user.r#type.as_str() {
-        "superadmin" => {
-            println!("creating org.");
-            match Org::create(state.db, &payload).await {
-                Ok(_) => {
-                    return (StatusCode::OK, "org created".into());
-                }
-                Err(_) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "org creation failed".into(),
-                    );
-                }
-            }
-        }
-        _ => (StatusCode::UNAUTHORIZED, "org creation not permitted"),
+    if user.r#type != "superadmin" {
+        return (StatusCode::UNAUTHORIZED, "org creation not permitted").into_response();
+    }
+
+    println!("creating org.");
+    match Org::create(state.db, &payload).await {
+        Ok(_) => (StatusCode::OK, "org created").into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "org creation failed").into_response(),
     }
 }
 
@@ -41,9 +33,11 @@ pub async fn get_org<D: Database>(
     if user.r#type != "superadmin" {
         return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
     }
-    // Get org from DB
-    let org = Org::from_id(state.db, &org_id).await.unwrap();
-    (StatusCode::OK, Json(org)).into_response()
+
+    match Org::from_id(state.db, &org_id).await {
+        Ok(org) => (StatusCode::OK, Json(org)).into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, Json(json!("ORG NOT FOUND"))).into_response(),
+    }
 }
 
 pub async fn delete_org<D: Database>(
@@ -54,6 +48,9 @@ pub async fn delete_org<D: Database>(
     if user.r#type != "superadmin" {
         return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
     }
-    let _ = Org::delete(state.db, &org_id).await;
-    (StatusCode::OK, "ORG DELETED").into_response()
+
+    match Org::delete(state.db, &org_id).await {
+        Ok(_) => (StatusCode::OK, "ORG DELETED").into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "ORG DELETION FAILED").into_response(),
+    }
 }

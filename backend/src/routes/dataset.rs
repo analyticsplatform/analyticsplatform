@@ -5,19 +5,21 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, 
 use serde_json::json;
 
 // TODO: Accept anonymous users with UserExtension
+
 pub async fn get_datasets<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user_ext): Extension<UserExtension>,
 ) -> impl IntoResponse {
-    let _user = if let Some(u) = user_ext.user {
-        if u.r#type != "superadmin" {
+    if let Some(user) = user_ext.user {
+        if user.r#type != "superadmin" {
             return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
         }
-    };
+    }
 
-    let datasets = Dataset::get_all(state.db).await.unwrap();
-
-    (StatusCode::OK, Json(json!(datasets))).into_response()
+    match Dataset::get_all(state.db).await {
+        Ok(datasets) => (StatusCode::OK, Json(json!(datasets))).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 pub async fn create_dataset<D: Database>(
@@ -25,12 +27,14 @@ pub async fn create_dataset<D: Database>(
     Extension(user_ext): Extension<UserExtension>,
     Json(payload): Json<CreateDataset>,
 ) -> impl IntoResponse {
-    let _user = if let Some(u) = user_ext.user {
-        if u.r#type != "superadmin" {
+    if let Some(user) = user_ext.user {
+        if user.r#type != "superadmin" {
             return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
         }
-    };
+    }
 
-    Dataset::create(state, payload).await.unwrap();
-    StatusCode::OK.into_response()
+    match Dataset::create(state, payload).await {
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }

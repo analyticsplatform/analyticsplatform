@@ -12,48 +12,47 @@ pub async fn create_connector<D: Database>(
     Extension(user_ext): Extension<UserExtension>,
     Json(payload): Json<CreateConnector>,
 ) -> impl IntoResponse {
-    println!("payload: {:?}", payload);
-    let user = if let Some(u) = user_ext.user {
-        if u.r#type != "superadmin" {
+    if let Some(user) = user_ext.user {
+        if user.r#type != "superadmin" {
             return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
         }
-    };
+    } else {
+        return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+    }
 
-    println!("user: {:?}", user);
-
-    let _ = match payload.r#type {
+    match payload.r#type {
         ConnectorType::Postgres => {
-            println!("postgres create");
-            PostgresConnector::create_record(
-                state.db,
-                CreateConnector {
-                    name: payload.name,
-                    r#type: payload.r#type,
-                    connection_string: payload.connection_string,
-                },
-            )
-            .await
+            if let Err(e) = PostgresConnector::create_record(state.db, payload).await {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!(e.to_string())),
+                )
+                    .into_response();
+            }
         }
-    };
+    }
 
-    (StatusCode::OK, "CREATED").into_response()
+    (StatusCode::OK, Json(json!("CREATED"))).into_response()
 }
 
 pub async fn get_connectors<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user_ext): Extension<UserExtension>,
 ) -> impl IntoResponse {
-    let user = if let Some(u) = user_ext.user {
-        if u.r#type != "superadmin" {
+    if let Some(user) = user_ext.user {
+        if user.r#type != "superadmin" {
             return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
         }
-    };
-    println!("user: {:?}", user);
+    } else {
+        return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+    }
 
-    let connector_details = ConnectorDetails::get_connector_details(state.db, true)
-        .await
-        .unwrap();
-    println!("conns: {:?}", connector_details);
-
-    (StatusCode::OK, Json(json!(connector_details))).into_response()
+    match ConnectorDetails::get_connector_details(state.db, true).await {
+        Ok(connector_details) => (StatusCode::OK, Json(json!(connector_details))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!(e.to_string())),
+        )
+            .into_response(),
+    }
 }
