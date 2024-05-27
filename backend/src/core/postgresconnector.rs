@@ -1,5 +1,5 @@
 use crate::core::common::create_id;
-use crate::core::{ConnectorDetails, ConnectorTrait, CreateConnector, DataInfo};
+use crate::core::connector;
 use crate::data::Database;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
@@ -11,10 +11,10 @@ pub struct PostgresConnector {
 }
 
 #[async_trait]
-impl ConnectorTrait for PostgresConnector {
-    async fn create_record<D: Database>(database: D, conn: CreateConnector) -> Result<()> {
+impl connector::Trait for PostgresConnector {
+    async fn create_record<D: Database>(database: D, conn: connector::Create) -> Result<()> {
         let id = create_id(8).await;
-        let connector_details = ConnectorDetails {
+        let connector_details = connector::Details {
             id,
             name: conn.name,
             r#type: conn.r#type,
@@ -36,14 +36,14 @@ impl ConnectorTrait for PostgresConnector {
         for row in rows {
             let schemaname: String = row.try_get("schemaname")?;
             let tablename: String = row.try_get("tablename")?;
-            let dataset = format!("{}.{}", schemaname, tablename);
+            let dataset = format!("{schemaname}.{tablename}");
             datasets.push(dataset);
         }
 
         Ok(datasets)
     }
 
-    async fn get_data_info(&self, path: &str) -> Result<DataInfo> {
+    async fn get_data_info(&self, path: &str) -> Result<connector::DataInfo> {
         let parts: Vec<&str> = path.split('.').collect();
         if parts.len() != 2 {
             return Err(anyhow!(
@@ -81,8 +81,8 @@ impl ConnectorTrait for PostgresConnector {
             })
             .collect();
 
-        let data_info = DataInfo {
-            path: format!("{}.{}", schema_name, table_name),
+        let data_info = connector::DataInfo {
+            path: format!("{schema_name}.{table_name}"),
             schema,
         };
 

@@ -1,4 +1,7 @@
-use crate::core::{Session, User, UserExtension};
+use crate::core::{
+    user::{self, User},
+    Session,
+};
 use crate::data::Database;
 use crate::AppState;
 use axum::{
@@ -37,41 +40,32 @@ pub async fn auth<D: Database>(
     };
 
     let token = token.unwrap();
-    let session = match Session::from_id(state.db.clone(), &token).await {
-        Ok(s) => s,
-        Err(_) => return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response(),
+    let Ok(session) = Session::from_id(state.db.clone(), &token).await else {
+        return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
     };
 
     request.extensions_mut().insert(session.clone());
-    match session.user_id {
-        Some(user_id) => {
-            info!("User ID found in session: {}", user_id);
-            let user_response = User::from_id(state.db, &user_id).await;
-
-            match user_response {
-                Ok(user) => {
-                    request
-                        .extensions_mut()
-                        .insert(UserExtension { user: Some(user) });
-                }
-                Err(_) => {
-                    info!("User not found");
-                    return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
-                }
-            }
-        }
-        None => {
-            info!("Exisiting Anonymous Session");
-            if !allow_anonymous {
-                return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
-            }
+    if let Some(user_id) = session.user_id {
+        info!("User ID found in session: {}", user_id);
+        let user_response = User::from_id(state.db, &user_id).await;
+        if let Ok(user) = user_response {
             request
                 .extensions_mut()
-                .insert(UserExtension { user: None });
-
-            let response = next.run(request).await;
-            return (StatusCode::OK, response).into_response();
+                .insert(user::Extension { user: Some(user) });
+        } else {
+            info!("User not found");
+            return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
         }
+    } else {
+        info!("Exisiting Anonymous Session");
+        if !allow_anonymous {
+            return (StatusCode::UNAUTHORIZED, "UNAUTHORIZED").into_response();
+        }
+        request
+            .extensions_mut()
+            .insert(user::Extension { user: None });
+        let response = next.run(request).await;
+        return (StatusCode::OK, response).into_response();
     }
     let response = next.run(request).await;
     response.into_response()

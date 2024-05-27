@@ -1,4 +1,7 @@
-use crate::core::{CreateUser, Profile, User, UserExtension};
+use crate::core::{
+    user::{self, User},
+    Profile,
+};
 use crate::data::Database;
 use crate::AppState;
 use axum::{
@@ -6,27 +9,24 @@ use axum::{
 };
 
 #[debug_handler]
-pub async fn profile(Extension(user_ext): Extension<UserExtension>) -> impl IntoResponse {
+pub async fn profile(Extension(user_ext): Extension<user::Extension>) -> impl IntoResponse {
     Json(user_ext.user.map(Profile::from)).into_response()
 }
 
-pub async fn create_user<D: Database>(
+pub async fn create<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user): Extension<User>,
-    Json(payload): Json<CreateUser>,
+    Json(payload): Json<user::Create>,
 ) -> impl IntoResponse {
     match user.r#type.as_str() {
         "superadmin" => {
             println!("creating user.");
-            match User::create(state.db, &payload).await {
-                Ok(_) => {
-                    println!("user created successfully");
-                    (StatusCode::OK, "user created")
-                }
-                Err(_) => {
-                    println!("user creation failed");
-                    (StatusCode::INTERNAL_SERVER_ERROR, "Error")
-                }
+            if let Ok(()) = User::create(state.db, &payload).await {
+                println!("user created successfully");
+                (StatusCode::OK, "user created")
+            } else {
+                println!("user creation failed");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Error")
             }
         }
         _ => (StatusCode::UNAUTHORIZED, "user creation not permitted"),

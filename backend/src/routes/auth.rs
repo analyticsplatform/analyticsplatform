@@ -22,27 +22,24 @@ pub async fn login<D: Database>(
     State(state): State<AppState<D>>,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    match User::from_email(state.db.clone(), &payload.email).await {
-        Ok(user) => {
-            if let Ok(parsed_hash) = PasswordHash::new(&user.hash) {
-                if Argon2::default()
-                    .verify_password(&payload.password.into_bytes(), &parsed_hash)
-                    .is_ok()
-                {
-                    if let Ok(session) = Session::create(state.db, Some(&user)).await {
-                        return (
-                            StatusCode::OK,
-                            Json(LoginResponse { token: session.id }).into_response(),
-                        );
-                    }
+    if let Ok(user) = User::from_email(state.db.clone(), &payload.email).await {
+        if let Ok(parsed_hash) = PasswordHash::new(&user.hash) {
+            if Argon2::default()
+                .verify_password(&payload.password.into_bytes(), &parsed_hash)
+                .is_ok()
+            {
+                if let Ok(session) = Session::create(state.db, Some(&user)).await {
+                    return (
+                        StatusCode::OK,
+                        Json(LoginResponse { token: session.id }).into_response(),
+                    );
                 }
             }
-            (StatusCode::UNAUTHORIZED, "auth failed".into_response())
         }
-        Err(_) => {
-            info!("USER: search failed");
-            (StatusCode::UNAUTHORIZED, "ERROR: AUTH".into_response())
-        }
+        (StatusCode::UNAUTHORIZED, "auth failed".into_response())
+    } else {
+        info!("USER: search failed");
+        (StatusCode::UNAUTHORIZED, "ERROR: AUTH".into_response())
     }
 }
 

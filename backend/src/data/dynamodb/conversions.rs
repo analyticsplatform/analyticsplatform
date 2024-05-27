@@ -1,4 +1,4 @@
-use crate::core::{ConnectorDetails, Dataset, Email, Org, Session, Team, User};
+use crate::core::{connector, Dataset, Email, Org, Session, Team, User};
 use aws_sdk_dynamodb::types::AttributeValue as AV;
 use std::collections::HashMap;
 
@@ -63,9 +63,9 @@ impl From<HashMap<String, AV>> for Org {
     }
 }
 
-impl From<HashMap<String, AV>> for ConnectorDetails {
+impl From<HashMap<String, AV>> for connector::Details {
     fn from(value: HashMap<String, AV>) -> Self {
-        ConnectorDetails {
+        connector::Details {
             id: split_at_hash(value.get("PK").unwrap().as_s().unwrap()).to_string(),
             name: split_at_hash(value.get("GSI1PK").unwrap().as_s().unwrap()).to_string(),
             connection_string: value
@@ -93,7 +93,7 @@ impl From<HashMap<String, AV>> for Dataset {
             provider: Some(
                 value
                     .get("provider")
-                    .unwrap_or(&AV::S("".to_string()))
+                    .unwrap_or(&AV::S(String::new()))
                     .as_s()
                     .unwrap()
                     .to_string(),
@@ -113,17 +113,14 @@ impl From<HashMap<String, AV>> for Dataset {
                 .to_string(),
             schema: serde_json::from_str(value.get("schema").unwrap().as_s().unwrap()).unwrap(),
             tags: serde_json::from_str(value.get("tags").unwrap().as_s().unwrap()).unwrap(),
-            metadata: value
-                .get("metadata")
-                .map(|metadata| {
-                    let metadata_str = metadata.as_s().unwrap();
-                    if metadata_str.is_empty() {
-                        None
-                    } else {
-                        Some(serde_json::from_str(metadata_str).unwrap())
-                    }
-                })
-                .unwrap_or(None),
+            metadata: value.get("metadata").and_then(|metadata| {
+                let metadata_str = metadata.as_s().unwrap();
+                if metadata_str.is_empty() {
+                    None
+                } else {
+                    Some(serde_json::from_str(metadata_str).unwrap())
+                }
+            }),
         }
     }
 }

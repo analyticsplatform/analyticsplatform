@@ -11,12 +11,12 @@ pub struct Team {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CreateTeam {
+pub struct Create {
     pub name: String,
 }
 
 impl Team {
-    pub async fn create<T: Database>(database: T, team: &CreateTeam) -> Result<()> {
+    pub async fn create<T: Database>(database: T, team: &Create) -> Result<()> {
         let id = create_id(30).await;
         let db_resp = database
             .create_team(&Team {
@@ -27,7 +27,7 @@ impl Team {
             .await;
 
         match db_resp {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             Err(_) => Err(anyhow!("failed to create team")),
         }
     }

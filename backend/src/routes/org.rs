@@ -1,4 +1,7 @@
-use crate::core::{CreateOrg, Org, User};
+use crate::core::{
+    org::{Create, Org},
+    User,
+};
 use crate::data::Database;
 use crate::AppState;
 use axum::{
@@ -9,10 +12,10 @@ use axum::{
 };
 use serde_json::json;
 
-pub async fn create_org<D: Database>(
+pub async fn create<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user): Extension<User>,
-    Json(payload): Json<CreateOrg>,
+    Json(payload): Json<Create>,
 ) -> impl IntoResponse {
     if user.r#type != "superadmin" {
         return (StatusCode::UNAUTHORIZED, "org creation not permitted").into_response();
@@ -20,12 +23,12 @@ pub async fn create_org<D: Database>(
 
     println!("creating org.");
     match Org::create(state.db, &payload).await {
-        Ok(_) => (StatusCode::OK, "org created").into_response(),
+        Ok(()) => (StatusCode::OK, "org created").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "org creation failed").into_response(),
     }
 }
 
-pub async fn get_org<D: Database>(
+pub async fn get<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user): Extension<User>,
     Path(org_id): Path<String>,
@@ -40,7 +43,7 @@ pub async fn get_org<D: Database>(
     }
 }
 
-pub async fn delete_org<D: Database>(
+pub async fn delete<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user): Extension<User>,
     Path(org_id): Path<String>,
@@ -50,7 +53,7 @@ pub async fn delete_org<D: Database>(
     }
 
     match Org::delete(state.db, &org_id).await {
-        Ok(_) => (StatusCode::OK, "ORG DELETED").into_response(),
+        Ok(()) => (StatusCode::OK, "ORG DELETED").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "ORG DELETION FAILED").into_response(),
     }
 }

@@ -1,5 +1,7 @@
 use crate::core::{
-    create_id, ConnectorDetails, CreateUser, Dataset, Email, Org, Session, Team, User,
+    connector, create_id,
+    user::{self},
+    Dataset, Email, Org, Session, Team, User,
 };
 use crate::data::{Database, SessionStore, UserStore};
 use anyhow::{anyhow, Result};
@@ -23,25 +25,21 @@ impl Dynamodb {
         let region_provider = RegionProviderChain::default_provider().or_else("eu-west-2");
 
         // Set endpoint url to localhost to run locally
-        let config = match local {
-            true => {
-                let defaults = aws_config::defaults(BehaviorVersion::latest())
-                    .region(region_provider)
-                    .load()
-                    .await;
-                aws_sdk_dynamodb::config::Builder::from(&defaults)
-                    .endpoint_url("http://localhost:8090")
-                    .build()
-            }
-            false => {
-                let defaults = aws_config::defaults(BehaviorVersion::latest())
-                    .region(region_provider)
-                    .load()
-                    .await;
-                aws_sdk_dynamodb::config::Builder::from(&defaults).build()
-            }
+        let config = if local {
+            let defaults = aws_config::defaults(BehaviorVersion::latest())
+                .region(region_provider)
+                .load()
+                .await;
+            aws_sdk_dynamodb::config::Builder::from(&defaults)
+                .endpoint_url("http://localhost:8090")
+                .build()
+        } else {
+            let defaults = aws_config::defaults(BehaviorVersion::latest())
+                .region(region_provider)
+                .load()
+                .await;
+            aws_sdk_dynamodb::config::Builder::from(&defaults).build()
         };
-
         let client = Client::from_conf(config);
 
         // Check if table exists
@@ -61,26 +59,22 @@ impl Dynamodb {
         let admin_user = User::from_email(dynamodb.clone(), "test@example.com").await;
 
         #[allow(clippy::useless_conversion)]
-        match admin_user {
-            Ok(_) => {
-                info!("db init: admin user exists.");
-            }
-            Err(_) => {
-                info!("db init: creating admin user.");
-                let password = create_id(10).await;
-                let admin_user = CreateUser {
-                    email: String::from("test@example.com"),
-                    first_name: String::from("Admin"),
-                    last_name: String::from(password.clone()), // TODO: REMOVE: This is to reveal
-                    // the admin password via the db
-                    r#type: String::from("superadmin"),
-                    password,
-                };
+        if admin_user.is_ok() {
+            info!("db init: admin user exists.");
+        } else {
+            info!("db init: creating admin user.");
+            let password = create_id(10).await;
+            let admin_user = user::Create {
+                email: String::from("test@example.com"),
+                first_name: String::from("Admin"),
+                last_name: String::from(password.clone()), // TODO: REMOVE: This is to reveal
+                // the admin password via the db
+                r#type: String::from("superadmin"),
+                password,
+            };
 
-                let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
-            }
+            let _admin_user = User::create(dynamodb.clone(), &admin_user).await;
         }
-
         Ok(dynamodb)
     }
 }
@@ -280,7 +274,7 @@ impl UserStore for Dynamodb {
         }
     }
 
-    async fn create_connector(&self, conn: ConnectorDetails) -> Result<()> {
+    async fn create_connector(&self, conn: connector::Details) -> Result<()> {
         // Create the item to insert
         let mut item = std::collections::HashMap::new();
         let key = format!("{}{}", "CONNECTOR#", conn.id);
@@ -311,7 +305,7 @@ impl UserStore for Dynamodb {
         Ok(())
     }
 
-    async fn get_connectors(&self) -> Result<Vec<ConnectorDetails>> {
+    async fn get_connectors(&self) -> Result<Vec<connector::Details>> {
         let query_output = self
             .client
             .query()
@@ -326,7 +320,7 @@ impl UserStore for Dynamodb {
             Some(query_items) => Ok(query_items
                 .iter()
                 .map(|element| element.clone().into())
-                .collect::<Vec<ConnectorDetails>>()),
+                .collect::<Vec<connector::Details>>()),
             None => Ok(Vec::new()),
         }
     }

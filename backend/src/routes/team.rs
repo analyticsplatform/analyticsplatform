@@ -1,4 +1,7 @@
-use crate::core::{CreateTeam, Team, User};
+use crate::core::{
+    team::{self, Team},
+    User,
+};
 use crate::data::Database;
 use crate::AppState;
 use axum::{
@@ -9,10 +12,10 @@ use axum::{
 };
 use serde_json::json;
 
-pub async fn create_team<D: Database>(
+pub async fn create<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user): Extension<User>,
-    Json(payload): Json<CreateTeam>,
+    Json(payload): Json<team::Create>,
 ) -> impl IntoResponse {
     if user.r#type != "superadmin" {
         return (StatusCode::UNAUTHORIZED, "team creation not permitted").into_response();
@@ -20,12 +23,12 @@ pub async fn create_team<D: Database>(
 
     println!("creating team.");
     match Team::create(state.db, &payload).await {
-        Ok(_) => (StatusCode::OK, "team created").into_response(),
+        Ok(()) => (StatusCode::OK, "team created").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "team creation failed").into_response(),
     }
 }
 
-pub async fn get_team<D: Database>(
+pub async fn get<D: Database>(
     State(state): State<AppState<D>>,
     Extension(user): Extension<User>,
     Path(team_id): Path<String>,

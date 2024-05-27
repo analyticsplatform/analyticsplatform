@@ -1,4 +1,7 @@
-use crate::core::{CreateDataset, Dataset, UserExtension};
+use crate::core::{
+    dataset::{Create, Dataset},
+    user,
+};
 use crate::data::Database;
 use crate::AppState;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
@@ -6,9 +9,9 @@ use serde_json::json;
 
 // TODO: Accept anonymous users with UserExtension
 
-pub async fn get_datasets<D: Database>(
+pub async fn get<D: Database>(
     State(state): State<AppState<D>>,
-    Extension(user_ext): Extension<UserExtension>,
+    Extension(user_ext): Extension<user::Extension>,
 ) -> impl IntoResponse {
     if let Some(user) = user_ext.user {
         if user.r#type != "superadmin" {
@@ -22,10 +25,10 @@ pub async fn get_datasets<D: Database>(
     }
 }
 
-pub async fn create_dataset<D: Database>(
+pub async fn create<D: Database>(
     State(state): State<AppState<D>>,
-    Extension(user_ext): Extension<UserExtension>,
-    Json(payload): Json<CreateDataset>,
+    Extension(user_ext): Extension<user::Extension>,
+    Json(payload): Json<Create>,
 ) -> impl IntoResponse {
     if let Some(user) = user_ext.user {
         if user.r#type != "superadmin" {
@@ -34,7 +37,7 @@ pub async fn create_dataset<D: Database>(
     }
 
     match Dataset::create(state, payload).await {
-        Ok(_) => StatusCode::OK.into_response(),
+        Ok(()) => StatusCode::OK.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }

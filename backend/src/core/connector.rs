@@ -16,39 +16,39 @@ pub enum Connector {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum ConnectorType {
+pub enum Type {
     Postgres,
 }
 
-impl fmt::Display for ConnectorType {
+impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ConnectorType::Postgres => write!(f, "postgres"),
+            Type::Postgres => write!(f, "postgres"),
         }
     }
 }
 
-impl From<String> for ConnectorType {
+impl From<String> for Type {
     fn from(s: String) -> Self {
         match s.as_str() {
-            "postgres" => ConnectorType::Postgres,
-            _ => panic!("Invalid connector type: {}", s),
+            "postgres" => Type::Postgres,
+            _ => panic!("Invalid connector type: {s}"),
         }
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CreateConnector {
+pub struct Create {
     pub name: String,
-    pub r#type: ConnectorType,
+    pub r#type: Type,
     pub connection_string: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ConnectorDetails {
+pub struct Details {
     pub id: String,
     pub name: String,
-    pub r#type: ConnectorType,
+    pub r#type: Type,
     pub connection_string: String,
 }
 
@@ -58,7 +58,7 @@ pub struct DataInfo {
     pub schema: HashMap<String, String>,
 }
 
-impl ConnectorDetails {
+impl Details {
     pub async fn get_connector_details<D: Database>(
         database: D,
         hide_connection_string: bool,
@@ -66,7 +66,7 @@ impl ConnectorDetails {
         let mut connector_details = database.get_connectors().await?;
 
         if hide_connection_string {
-            for connector in connector_details.iter_mut() {
+            for connector in &mut connector_details {
                 connector.connection_string = "***".to_string();
             }
         }
@@ -77,7 +77,7 @@ impl ConnectorDetails {
 
 impl Connector {
     pub async fn create_connectors<D: Database>(database: D) -> Result<HashMap<String, Connector>> {
-        let connector_details = ConnectorDetails::get_connector_details(database, false).await?;
+        let connector_details = Details::get_connector_details(database, false).await?;
 
         let mut connectors = HashMap::new();
         for connector_detail in connector_details {
@@ -107,8 +107,8 @@ impl Connector {
 }
 
 #[async_trait]
-pub trait ConnectorTrait: Send + Sync + Debug {
-    async fn create_record<D: Database>(database: D, conn: CreateConnector) -> Result<()>;
+pub trait Trait: Send + Sync + Debug {
+    async fn create_record<D: Database>(database: D, conn: Create) -> Result<()>;
     async fn get_available_datasets(&self) -> Result<Vec<String>>;
     async fn get_data_info(&self, path: &str) -> Result<DataInfo>;
 }

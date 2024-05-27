@@ -17,7 +17,7 @@ pub struct Dataset {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CreateDataset {
+pub struct Create {
     pub name: String,
     pub provider: Option<String>,
     pub connector_id: String,
@@ -28,7 +28,7 @@ pub struct CreateDataset {
 }
 
 impl Dataset {
-    pub async fn create<D: Database>(state: AppState<D>, payload: CreateDataset) -> Result<()> {
+    pub async fn create<D: Database>(state: AppState<D>, payload: Create) -> Result<()> {
         let id = create_id(8).await;
 
         // Check if connector exists

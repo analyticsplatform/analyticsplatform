@@ -20,12 +20,12 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct UserExtension {
+pub struct Extension {
     pub user: Option<User>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CreateUser {
+pub struct Create {
     pub email: String,
     pub first_name: String,
     pub last_name: String,
@@ -50,7 +50,7 @@ pub struct Profile {
 }
 
 impl User {
-    pub async fn create<T: Database>(database: T, user: &CreateUser) -> Result<()> {
+    pub async fn create<T: Database>(database: T, user: &Create) -> Result<()> {
         let user_id = create_id(10).await;
         let new_user = User::from_create_user(user, &user_id, true);
         database.create_user(&new_user).await
@@ -64,7 +64,7 @@ impl User {
         database.get_user_by_email(email).await
     }
 
-    fn from_create_user(create_user: &CreateUser, id: &str, is_active: bool) -> User {
+    fn from_create_user(create_user: &Create, id: &str, is_active: bool) -> User {
         // Generate password hash
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
