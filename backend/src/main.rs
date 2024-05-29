@@ -34,7 +34,6 @@ async fn main() {
 
     let local = env::var("LOCAL").is_ok();
     let table_name = env::var("TABLE_NAME").unwrap();
-    let _connections: Arc<HashMap<std::string::String, Connector>> = Arc::new(HashMap::new());
 
     let database = Dynamodb::new(local, &table_name).await.unwrap();
     let connections = Arc::new(
