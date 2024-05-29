@@ -57,6 +57,10 @@ async fn main() {
         .route("/teams/:team_id", get(routes::team::get))
         .route("/connectors", post(routes::connector::create))
         .route("/connectors", get(routes::connector::get))
+        .route(
+            "/connectors/:conn_id/datasets",
+            get(routes::connector::all_datasets),
+        )
         .route("/datasets", get(routes::dataset::get))
         .route("/dataset", post(routes::dataset::create))
         .layer(ServiceBuilder::new().layer(middleware::from_fn_with_state(state.clone(), auth)))

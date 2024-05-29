@@ -55,3 +55,25 @@ pub async fn get<D: Database>(
             .into_response(),
     }
 }
+
+pub async fn all_datasets<D: Database>(
+    State(state): State<AppState<D>>,
+    Extension(user_ext): Extension<user::Extension>,
+) -> impl IntoResponse {
+    if let Some(user) = user_ext.user {
+        if user.r#type != "superadmin" {
+            return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+        }
+    } else {
+        return (StatusCode::UNAUTHORIZED, Json(json!("UNAUTHORIZED"))).into_response();
+    }
+
+    match connector::Details::get_connector_details(state.db, true).await {
+        Ok(connector_details) => (StatusCode::OK, Json(json!(connector_details))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!(e.to_string())),
+        )
+            .into_response(),
+    }
+}
