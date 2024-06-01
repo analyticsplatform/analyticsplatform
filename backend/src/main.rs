@@ -15,7 +15,7 @@ use std::env;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::trace::{self, TraceLayer};
-use tracing::Level;
+use tracing::{info, Level};
 
 use crate::core::{auth, Connector};
 use crate::data::Dynamodb;
@@ -32,10 +32,15 @@ pub struct AppState<D: Database> {
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let local = env::var("LOCAL").is_ok();
+    let dynamodb_endpoint = env::var("DYNAMODB_ENDPOINT").ok();
     let table_name = env::var("TABLE_NAME").unwrap();
 
-    let database = Dynamodb::new(local, &table_name).await.unwrap();
+    info!("table_name: {table_name}");
+    info!("dynamodb_endpoint: {dynamodb_endpoint:?}");
+
+    let database = Dynamodb::new(dynamodb_endpoint.as_deref(), &table_name)
+        .await
+        .unwrap();
     let connections = Arc::new(
         Connector::create_connectors(database.clone())
             .await

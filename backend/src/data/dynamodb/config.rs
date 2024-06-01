@@ -8,7 +8,11 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
-use aws_sdk_dynamodb::types::AttributeValue as AV;
+use aws_sdk_dynamodb::error::{ProvideErrorMetadata, SdkError};
+use aws_sdk_dynamodb::types::{
+    AttributeDefinition, AttributeValue as AV, BillingMode, GlobalSecondaryIndex, KeySchemaElement,
+    KeyType, Projection, ProjectionType, ScalarAttributeType,
+};
 use aws_sdk_dynamodb::Client;
 use tracing::{error, info};
 
@@ -21,17 +25,125 @@ pub struct Dynamodb {
 impl Database for Dynamodb {}
 
 impl Dynamodb {
-    pub async fn new(local: bool, table_name: &str) -> Result<Self> {
+    // binding's name is too similar warning supressed for pk/sk variables
+    #[allow(clippy::similar_names)]
+    async fn create_table(
+        client: &Client,
+        table_name: &str,
+    ) -> Result<(), aws_sdk_dynamodb::Error> {
+        let pk_attr = AttributeDefinition::builder()
+            .attribute_name("PK")
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+
+        let sk_attr = AttributeDefinition::builder()
+            .attribute_name("SK")
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+
+        let gsi1_pk_attr = AttributeDefinition::builder()
+            .attribute_name("GSI1PK")
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+
+        let gsi1_sk_attr = AttributeDefinition::builder()
+            .attribute_name("GSI1SK")
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+
+        let gsi2_pk_attr = AttributeDefinition::builder()
+            .attribute_name("GSI2PK")
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+
+        let gsi2_sk_attr = AttributeDefinition::builder()
+            .attribute_name("GSI2SK")
+            .attribute_type(ScalarAttributeType::S)
+            .build()?;
+
+        let pk = KeySchemaElement::builder()
+            .attribute_name("PK")
+            .key_type(KeyType::Hash)
+            .build()?;
+
+        let sk = KeySchemaElement::builder()
+            .attribute_name("SK")
+            .key_type(KeyType::Range)
+            .build()?;
+
+        let gsi1 = GlobalSecondaryIndex::builder()
+            .index_name("GSI1")
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name("GSI1PK")
+                    .key_type(KeyType::Hash)
+                    .build()?,
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name("GSI1SK")
+                    .key_type(KeyType::Range)
+                    .build()?,
+            )
+            .projection(
+                Projection::builder()
+                    .projection_type(ProjectionType::All)
+                    .build(),
+            )
+            .build()?;
+
+        let gsi2 = GlobalSecondaryIndex::builder()
+            .index_name("GSI2")
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name("GSI2PK")
+                    .key_type(KeyType::Hash)
+                    .build()?,
+            )
+            .key_schema(
+                KeySchemaElement::builder()
+                    .attribute_name("GSI2SK")
+                    .key_type(KeyType::Range)
+                    .build()?,
+            )
+            .projection(
+                Projection::builder()
+                    .projection_type(ProjectionType::All)
+                    .build(),
+            )
+            .build()?;
+
+        client
+            .create_table()
+            .table_name(table_name)
+            .attribute_definitions(pk_attr)
+            .attribute_definitions(sk_attr)
+            .attribute_definitions(gsi1_pk_attr)
+            .attribute_definitions(gsi1_sk_attr)
+            .attribute_definitions(gsi2_pk_attr)
+            .attribute_definitions(gsi2_sk_attr)
+            .key_schema(pk)
+            .key_schema(sk)
+            .global_secondary_indexes(gsi1)
+            .global_secondary_indexes(gsi2)
+            .billing_mode(BillingMode::PayPerRequest)
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn new(dynamodb_endpoint: Option<&str>, table_name: &str) -> Result<Self> {
         let region_provider = RegionProviderChain::default_provider().or_else("eu-west-2");
 
         // Set endpoint url to localhost to run locally
-        let config = if local {
+        let config = if let Some(endpoint) = dynamodb_endpoint {
             let defaults = aws_config::defaults(BehaviorVersion::latest())
                 .region(region_provider)
                 .load()
                 .await;
             aws_sdk_dynamodb::config::Builder::from(&defaults)
-                .endpoint_url("http://localhost:8090")
+                .endpoint_url(endpoint)
                 .build()
         } else {
             let defaults = aws_config::defaults(BehaviorVersion::latest())
@@ -45,11 +157,16 @@ impl Dynamodb {
         // Check if table exists
         match &client.describe_table().table_name(table_name).send().await {
             Ok(_) => info!("Table found."),
-            Err(err) => {
-                error!("table connection error: {}", err);
+            Err(SdkError::ServiceError(e)) if e.err().is_resource_not_found_exception() => {
+                info!("table not found. creating table: {table_name}");
+                Self::create_table(&client, table_name).await?;
+            }
+            Err(e) => {
+                let err_str = e.message();
+                error!("{err_str:?}");
                 return Err(anyhow!("table: connection error"));
             }
-        };
+        }
 
         let dynamodb = Dynamodb {
             client: client.clone(),
